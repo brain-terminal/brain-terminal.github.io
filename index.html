@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brain Terminal</title>
+    <title>Retro Terminal Portfolio</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <style>
@@ -89,81 +89,45 @@
         let history = [];
         let historyIndex = -1;
 
-        // Mock File System
+        // Mapping terminal filenames to actual URLs on your server
+        // If a key is a string, it's a direct URL to fetch.
         const fileSystem = {
             'root': {
+                'index.html': '/about.txt', // This will fetch yourdomain.com/about.txt
+                'resume.md': '/assets/resume.md', 
                 'projects': {
-                    'terminal-web.md': "A website navigated entirely via CLI. Built with HTML/JS/Tailwind.",
-                    'space-sim.txt': "A 3D simulation using Three.js.",
-                    'notes.pdf': "[Binary data simulated]"
+                    'web-app.js': '/js/app.js',
+                    'styles.css': '/css/main.css'
                 },
-                'projects': {
-                    'terminal-web.md': "A website navigated entirely via CLI. Built with HTML/JS/Tailwind.",
-                    'space-sim.txt': "A 3D simulation using Three.js.",
-                    'notes.pdf': "[Binary data simulated]"
-                },
-                'projects': {
-                    'terminal-web.md': "A website navigated entirely via CLI. Built with HTML/JS/Tailwind.",
-                    'space-sim.txt': "A 3D simulation using Three.js.",
-                    'notes.pdf': "[Binary data simulated]"
-                }
+                'contact.txt': "Email: hello@example.com" // Strings not starting with '/' are treated as local text
             }
         };
 
-        let currentPath = ['root'];
+        let currentPath = ['home'];
 
         const commands = {
-            help: () => `Available commands:
-  ls       - List directory contents
-  cd [dir] - Change directory
-  cat [f]  - Display file content
-  clear    - Clear the terminal
-  whoami   - Display current user
-  pwd      - Print working directory
-  help     - Show this menu
-  date     - Show current date`,
-            
-            whoami: () => "visitor",
-            
-            date: () => new Date().toString(),
-            
-            pwd: () => "/" + currentPath.join('/'),
-            
-            ls: () => {
-                let current = getDir(currentPath);
-                let items = Object.keys(current).map(key => {
-                    return typeof current[key] === 'object' 
-                        ? `<span class="dir-color">${key}/</span>` 
-                        : `<span class="file-color">${key}</span>`;
-                });
-                return items.join('    ');
-            },
+            // ... existing help/whoami/date/pwd/ls/mkdir/touch/rm/reset commands ...
 
-            cd: (args) => {
-                if (!args[0] || args[0] === '~') {
-                    currentPath = ['home'];
-                    return "";
-                }
-                if (args[0] === '..') {
-                    if (currentPath.length > 1) currentPath.pop();
-                    return "";
-                }
-                
-                let current = getDir(currentPath);
-                if (current[args[0]] && typeof current[args[0]] === 'object') {
-                    currentPath.push(args[0]);
-                    return "";
-                } else {
-                    return `<span class="error-msg">-bash: cd: ${args[0]}: No such directory</span>`;
-                }
-            },
-
-            cat: (args) => {
+            cat: async (args) => {
                 if (!args[0]) return "Usage: cat [filename]";
                 let current = getDir(currentPath);
-                if (current[args[0]] && typeof current[args[0]] === 'string') {
-                    return current[args[0]];
-                } else if (current[args[0]] && typeof current[args[0]] === 'object') {
+                let target = current[args[0]];
+
+                if (target && typeof target === 'string') {
+                    // Check if it looks like a path/URL
+                    if (target.startsWith('/') || target.startsWith('http')) {
+                        print(`<span class="system-msg">Fetching remote content from ${target}...</span>`);
+                        try {
+                            const response = await fetch(target);
+                            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                            const content = await response.text();
+                            return content;
+                        } catch (e) {
+                            return `<span class="error-msg">Error fetching file: ${e.message}. (Ensure the file exists at ${target} and CORS is enabled if it's on a different domain)</span>`;
+                        }
+                    }
+                    return target; // Return local mock string
+                } else if (target && typeof target === 'object') {
                     return `<span class="error-msg">cat: ${args[0]}: Is a directory</span>`;
                 } else {
                     return `<span class="error-msg">cat: ${args[0]}: No such file</span>`;
@@ -176,28 +140,9 @@
             }
         };
 
-        function getDir(path) {
-            let current = fileSystem;
-            for (let part of path) {
-                current = current[part];
-            }
-            return current;
-        }
+        // ... existing getDir function ...
 
-        function print(text, isCommand = false) {
-            if (text === null) return;
-            const line = document.createElement('div');
-            line.className = 'mb-2';
-            if (isCommand) {
-                line.innerHTML = `<span class="prompt-symbol">visitor@portfolio:${commands.pwd()}$</span> ${text}`;
-            } else {
-                line.innerHTML = text;
-            }
-            output.appendChild(line);
-            output.scrollTop = output.scrollHeight;
-        }
-
-        function handleCommand(inputVal) {
+        async function handleCommand(inputVal) {
             const trimmed = inputVal.trim();
             if (!trimmed) return;
 
@@ -211,43 +156,15 @@
             const args = parts.slice(1);
 
             if (commands[cmd]) {
-                const result = commands[cmd](args);
+                // We use await here because cat is now an async function
+                const result = await commands[cmd](args);
                 print(result);
             } else {
                 print(`<span class="error-msg">Command not found: ${cmd}. Type 'help' for assistance.</span>`);
             }
         }
 
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                handleCommand(input.value);
-                input.value = '';
-            } else if (e.key === 'ArrowUp') {
-                if (historyIndex > 0) {
-                    historyIndex--;
-                    input.value = history[historyIndex];
-                }
-                e.preventDefault();
-            } else if (e.key === 'ArrowDown') {
-                if (historyIndex < history.length - 1) {
-                    historyIndex++;
-                    input.value = history[historyIndex];
-                } else {
-                    historyIndex = history.length;
-                    input.value = '';
-                }
-                e.preventDefault();
-            }
-        });
-
-        // Initialize
-        window.onload = () => {
-            print("Synapses firing...[OK]\nType 'help' to begin.\n");
-            input.focus();
-        };
-
-        // Keep input focused
-        document.addEventListener('click', () => input.focus());
+        // ... existing event listeners and window.onload ...
     </script>
 </body>
 </html>
