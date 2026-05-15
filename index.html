@@ -3,15 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BrainTerminal</title>
+    <title>Web Terminal + Cyber Go & LaTeX Renderer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
 
         :root {
             --term-bg: #0d0d0d;
             --term-green: #00ff41;
-            --term-green-dim: rgba(0, 255, 65, 0.3);
+            --term-green-dim: rgba(0, 255, 65, 0.2);
             --term-blue: #5dade2;
             --term-white: #fdfefe;
         }
@@ -34,16 +37,17 @@
         }
 
         .output-line {
-            margin-bottom: 6px;
+            margin-bottom: 12px;
             white-space: pre-wrap;
             word-break: break-all;
-            line-height: 1.5;
+            line-height: 1.6;
         }
 
         .input-area {
             display: flex;
             align-items: center;
-            margin-top: 5px;
+            margin-top: 10px;
+            padding-bottom: 20px;
         }
 
         .prompt {
@@ -69,6 +73,7 @@
         .system { color: #f1c40f; }
         .loading { color: #888; font-style: italic; }
 
+        /* Go Board Styling */
         .go-container {
             background: #000;
             border: 1px solid var(--term-green);
@@ -79,6 +84,10 @@
             box-shadow: 0 0 20px rgba(0, 255, 65, 0.15);
         }
 
+        /* KaTeX Customization to match Terminal Green */
+        .katex { color: var(--term-green) !important; font-size: 1.1em; }
+        .katex-display { margin: 1em 0; overflow-x: auto; overflow-y: hidden; }
+
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: var(--term-bg); }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
@@ -88,8 +97,8 @@
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">BrainTerminal v.4.0</div>
-            <div class="output-line">Type 'help' to see a list of available commands.</div>
+            <div class="output-line system">CyberBoard Engine v5.0.0 [LaTeX Protocol Initialized]</div>
+            <div class="output-line">Type 'ls' to browse or 'cat math_demo.md' to see LaTeX in action.</div>
             <div class="output-line">------------------------------------------------------------</div>
         </div>
         <div class="input-area">
@@ -103,28 +112,17 @@
             "home": {
                 type: "dir",
                 content: {
-                    "README.md": { 
+                    "math_demo.md": { 
                         type: "file", 
-                        url: "README.md" 
+                        content: "# Advanced Rendering Demo\n\n## 1. LaTeX Integration\nYou can use inline math like $E = mc^2$ or block math:\n\n$$\\int_{a}^{b} f(x)dx = F(b) - F(a)$$\n\n## 2. Cyber Go Strategy\nCheck this corner variation with labeled points:\n\n```go\nsize: 19\nviewport: m10-t19\nblack: Q16(1), R14(3), P17(5)\nwhite: D16(2), Q4(4)\nmarks: R16(A), Q17(B)\n```" 
                     },
-                    "Go": {
+                    "games": {
                         type: "dir",
                         content: {
-                            "Beginner": {
+                            "archive": {
                                 type: "dir",
                                 content: {
-                                    "equipment.md": { type: "file", url: "Go/Beginner/equipment.md" }
-                                }
-                            }
-                        }
-                    },
-                    "Mathematics": {
-                        type: "dir",
-                        content: {
-                            "Pre-calculus": {
-                                type: "dir",
-                                content: {
-                                    "test.md": { type: "file", url: "Mathematics/Pre-calculus/test.md" }
+                                    "final_match.md": { type: "file", url: "final_match.md" }
                                 }
                             }
                         }
@@ -149,6 +147,18 @@
             line.className = `output-line ${className}`;
             line.textContent = text;
             outputElement.appendChild(line);
+            
+            // Try rendering LaTeX if KaTeX is loaded
+            if (window.renderMathInElement) {
+                renderMathInElement(line, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false}
+                    ],
+                    throwOnError : false
+                });
+            }
+            
             scrollToBottom();
             return line;
         }
@@ -159,15 +169,10 @@
             if (!match) return null;
 
             let colChar = match[1].toUpperCase();
-            const rowStr = match[2];
-            const label = match[3] || null;
-
-            // In Go, 'I' is often skipped to avoid confusion with '1' or 'J'
-            // We'll calculate X based on standard alphabetical order first
             let x = colChar.charCodeAt(0) - 65;
-            
-            const rowNum = parseInt(rowStr);
+            const rowNum = parseInt(match[2]);
             const y = size - rowNum; 
+            const label = match[3] || null;
 
             if (x < 0 || x >= size || y < 0 || y >= size) return null;
             return { x, y, label };
@@ -181,15 +186,11 @@
             let vMinX = 0, vMaxX = size - 1, vMinY = 0, vMaxY = size - 1;
             if (viewportStr) {
                 const parts = viewportStr.split('-');
-                if (parts.length === 2) {
-                    const start = parseCoord(parts[0], size);
-                    const end = parseCoord(parts[1], size);
-                    if (start && end) {
-                        vMinX = Math.min(start.x, end.x);
-                        vMaxX = Math.max(start.x, end.x);
-                        vMinY = Math.min(start.y, end.y);
-                        vMaxY = Math.max(start.y, end.y);
-                    }
+                const start = parseCoord(parts[0], size);
+                const end = parseCoord(parts[1], size);
+                if (start && end) {
+                    vMinX = Math.min(start.x, end.x); vMaxX = Math.max(start.x, end.x);
+                    vMinY = Math.min(start.y, end.y); vMaxY = Math.max(start.y, end.y);
                 }
             }
 
@@ -203,7 +204,7 @@
 
             let svg = `<svg width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg">`;
             
-            // Rendering Phosphor Grid
+            // Grid
             svg += `<g stroke="${termGreen}" stroke-width="1" opacity="0.4">`;
             for (let i = 0; i < size; i++) {
                 if (i >= vMinY && i <= vMaxY) {
@@ -226,16 +227,13 @@
                 }
             });
 
+            // Labels
             svg += `<g fill="${termGreen}" font-size="12" font-family="'Fira Code', monospace" font-weight="bold" opacity="0.9">`;
-            for (let i = vMinX; i <= vMaxX; i++) {
-                // Using 65 for uppercase 'A'
-                svg += `<text x="${padding + (i - vMinX) * cellSize}" y="${svgHeight - 6}" text-anchor="middle">${String.fromCharCode(65 + i)}</text>`;
-            }
-            for (let i = vMinY; i <= vMaxY; i++) {
-                svg += `<text x="12" y="${padding + (i - vMinY) * cellSize + 4}" text-anchor="middle">${size - i}</text>`;
-            }
+            for (let i = vMinX; i <= vMaxX; i++) svg += `<text x="${padding + (i - vMinX) * cellSize}" y="${svgHeight - 6}" text-anchor="middle">${String.fromCharCode(65 + i)}</text>`;
+            for (let i = vMinY; i <= vMaxY; i++) svg += `<text x="12" y="${padding + (i - vMinY) * cellSize + 4}" text-anchor="middle">${size - i}</text>`;
             svg += `</g>`;
 
+            // Stones & Marks
             stones.forEach(s => {
                 if (s.x >= vMinX && s.x <= vMaxX && s.y >= vMinY && s.y <= vMaxY) {
                     const cx = padding + (s.x - vMinX) * cellSize;
@@ -244,21 +242,13 @@
                     
                     if (s.color === 'B') {
                         svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#000" stroke="${termGreen}" stroke-width="1.5" />`;
-                        if (s.label) {
-                            svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${termGreen}" font-size="12" font-family="'Fira Code'">${s.label}</text>`;
-                        }
+                        if (s.label) svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${termGreen}" font-size="12">${s.label}</text>`;
                     } else if (s.color === 'W') {
                         svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${termGreen}" />`;
-                        if (s.label) {
-                            svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="#000" font-size="12" font-family="'Fira Code'" font-weight="bold">${s.label}</text>`;
-                        }
-                    } else {
-                        // Color 'N' (Neutral/Mark)
-                        if (s.label) {
-                            // Draw a small background glow for the label to ensure legibility over lines
-                            svg += `<rect x="${cx - 8}" y="${cy - 8}" width="16" height="16" fill="#000" />`;
-                            svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${termGreen}" font-size="14" font-family="'Fira Code'" font-weight="bold">${s.label}</text>`;
-                        }
+                        if (s.label) svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="#000" font-size="12" font-weight="bold">${s.label}</text>`;
+                    } else if (s.color === 'N') {
+                        svg += `<rect x="${cx - 8}" y="${cy - 8}" width="16" height="16" fill="#000" />`;
+                        svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${termGreen}" font-size="14" font-weight="bold">${s.label}</text>`;
                     }
                 }
             });
@@ -278,9 +268,7 @@
                 if (beforeText) print(beforeText);
 
                 const inner = match[1].trim();
-                let size = 19;
-                let viewport = null;
-                let stones = [];
+                let size = 19, viewport = null, stones = [];
                 let rawLines = inner.split('\n');
                 
                 rawLines.forEach(line => {
@@ -290,13 +278,6 @@
                     const val = line.substring(sep + 1).trim();
                     if (key === 'size') size = parseInt(val) || 19;
                     if (key === 'viewport') viewport = val;
-                });
-
-                rawLines.forEach(line => {
-                    const sep = line.indexOf(':');
-                    if (sep === -1) return;
-                    const key = line.substring(0, sep).trim().toLowerCase();
-                    const val = line.substring(sep + 1).trim();
                     
                     const colorMap = { 'black': 'B', 'white': 'W', 'marks': 'N' };
                     if (colorMap[key]) {
@@ -319,6 +300,7 @@
         const commands = {
             help: () => {
                 print("Commands: ls, cd, cat, pwd, clear, help");
+                print("LaTeX: Use $...$ or $$...$$ in markdown files.");
             },
             pwd: () => print("/" + currentPath.join('/')),
             ls: () => {
@@ -330,12 +312,12 @@
                 });
             },
             cd: (args) => {
-                if (!args[0] || args[0] === "~") { currentPath = ["home"]; }
+                if (!args[0] || args[0] === "~") currentPath = ["home"];
                 else if (args[0] === "..") { if (currentPath.length > 1) currentPath.pop(); }
                 else {
                     const dir = getDirectory(currentPath);
-                    if (dir && dir[args[0]] && dir[args[0]].type === 'dir') { currentPath.push(args[0]); }
-                    else { print(`cd: no such directory: ${args[0]}`, "error"); }
+                    if (dir && dir[args[0]] && dir[args[0]].type === 'dir') currentPath.push(args[0]);
+                    else print(`cd: no such directory: ${args[0]}`, "error");
                 }
             },
             cat: async (args) => {
@@ -366,9 +348,8 @@
         function getDirectory(pathArr) {
             let current = VIRTUAL_FS;
             for (const part of pathArr) {
-                if (current[part] && current[part].type === 'dir') {
-                    current = current[part].content;
-                } else { return null; }
+                if (current[part] && current[part].type === 'dir') current = current[part].content;
+                else return null;
             }
             return current;
         }
