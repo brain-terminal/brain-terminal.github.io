@@ -6,8 +6,8 @@
     <title>Brain Terminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
 
@@ -25,7 +25,6 @@
             font-family: 'Fira Code', monospace;
             margin: 0;
             overflow: hidden;
-            /* Fluid font size based on viewport width */
             font-size: clamp(0.85rem, 2vw, 1rem);
         }
 
@@ -33,6 +32,7 @@
             height: 100vh;
             padding: 15px;
             overflow-y: auto;
+            overflow-x: hidden;
             display: flex;
             flex-direction: column;
             scrollbar-gutter: stable;
@@ -45,13 +45,22 @@
         .output-line {
             margin-bottom: 8px;
             white-space: pre-wrap;
-            word-break: break-all;
+            word-break: break-all; /* Force wrap at edge even without spaces */
             line-height: 1.5;
+            width: 100%;
+        }
+
+        .ls-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 20px;
+            margin-bottom: 8px;
         }
 
         .input-area {
             display: flex;
-            align-items: center;
+            flex-wrap: wrap; /* Allows input to wrap below prompt if needed */
+            align-items: flex-start;
             margin-top: 10px;
             padding-bottom: 30px;
         }
@@ -71,7 +80,8 @@
             font-size: inherit;
             outline: none;
             flex-grow: 1;
-            width: 100%;
+            min-width: 50px;
+            word-break: break-all;
         }
 
         .folder { color: var(--term-blue); font-weight: bold; }
@@ -87,23 +97,14 @@
             display: inline-block;
             padding: 10px;
             margin: 15px 0;
-            box-shadow: 0 0 15px rgba(0, 255, 65, 0.1);
-            max-width: 100%; /* Ensure it never overflows parent */
-            overflow-x: auto; /* Allow horizontal scroll if board is massive on tiny screen */
+            max-width: 100%;
+            overflow-x: auto;
         }
 
         .go-container svg {
             display: block;
             height: auto;
-            max-width: 100%; /* Makes SVG responsive */
-        }
-
-        .katex { color: var(--term-green) !important; font-size: 1.1em; }
-        .katex-display { 
-            margin: 1em 0; 
-            overflow-x: auto; 
-            overflow-y: hidden;
-            padding: 10px 0;
+            max-width: 100%;
         }
 
         ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -115,7 +116,7 @@
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">BrainTerminal v6.0.0</div>
+            <div class="output-line system">BrainTerminal v6.1.0</div>
             <div class="output-line">Type 'help' for a list of available commands.</div>
         </div>
         <div class="input-area">
@@ -129,10 +130,7 @@
             "root": {
                 type: "dir",
                 content: {
-                    "README.md": { 
-                        type: "file", 
-                        url: "README.md" 
-                    },
+                    "README.md": { type: "file", content: "# Welcome to Brain Terminal\nThis is your digital cortex." },
                     "synapses": {
                         type: "dir",
                         content: {
@@ -142,8 +140,8 @@
                                     "beginner": { 
                                         type: "dir", 
                                         content: {
-                                            "equipment.md": { type: "file", url: "go/beginner/equipment.md" }, 
-                                            "object-of-the-game.md": { type: "file", url: "go/beginner/object-of-the-game.md" }
+                                            "equipment.md": { type: "file", content: "Go equipment: Board (Goban), Stones (Go-ishi), and Bowls." }, 
+                                            "rules.md": { type: "file", content: "The object is to control more territory than your opponent." }
                                         }
                                     }
                                 }
@@ -154,33 +152,11 @@
                                     "jlpt-n5": { 
                                         type: "dir", 
                                         content: {
-                                            "final_match.md": { type: "file", url: "final_match.md" } 
+                                            "vocab.md": { type: "file", content: "N5 Vocabulary list in progress..." } 
                                         }
                                     }
                                 }
-                            },
-                            "mathematics": {
-                                type: "dir",
-                                content: {
-                                    "Pre-calculus": { 
-                                        type: "dir", 
-                                        content: {
-                                            "final_match.md": { type: "file", url: "final_match.md" } 
-                                        }
-                                    }
-                                }
-                            },
-                            "blank": {
-                                type: "dir",
-                                content: {
-                                    "blank": { 
-                                        type: "dir", 
-                                        content: {
-                                            "blank.md": { type: "file", url: "blank.md" } 
-                                        }
-                                    }
-                                }
-                            },
+                            }
                         }
                     }
                 }
@@ -204,230 +180,21 @@
             line.className = `output-line ${className}`;
             line.textContent = text;
             outputElement.appendChild(line);
-            
-            if (window.renderMathInElement) {
-                renderMathInElement(line, {
-                    delimiters: [
-                        {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false}
-                    ],
-                    throwOnError : false
-                });
-            }
             return line; 
         }
 
-        function parseCoord(input, size) {
-            const regex = /^([a-z])(\d+)(?:\((.*)\))?$/i;
-            const match = input.trim().match(regex);
-            if (!match) return null;
-
-            let colChar = match[1].toUpperCase();
-            let x = colChar.charCodeAt(0) - 65;
-            const rowNum = parseInt(match[2]);
-            const y = size - rowNum; 
-            const label = match[3] || null;
-
-            if (x < 0 || x >= size || y < 0 || y >= size) return null;
-            return { x, y, label };
+        function updatePrompt() {
+            // Visual display: Convert "root" to "~"
+            let displayPath = "";
+            if (currentPath.length === 1 && currentPath[0] === "root") {
+                displayPath = "~";
+            } else {
+                // Remove the internal "root" from the path display
+                const visualParts = currentPath.slice(1);
+                displayPath = "~/" + visualParts.join('/');
+            }
+            promptLabel.textContent = `psyche@brain:${displayPath}$`;
         }
-
-        function createBoardSVG(size, stones, viewportStr) {
-            const cellSize = 34;
-            const padding = 30;
-            const termGreen = "#00ff41";
-
-            let vMinX = 0, vMaxX = size - 1, vMinY = 0, vMaxY = size - 1;
-            if (viewportStr) {
-                const parts = viewportStr.split('-');
-                const start = parseCoord(parts[0], size);
-                const end = parseCoord(parts[1], size);
-                if (start && end) {
-                    vMinX = Math.min(start.x, end.x); vMaxX = Math.max(start.x, end.x);
-                    vMinY = Math.min(start.y, end.y); vMaxY = Math.max(start.y, end.y);
-                }
-            }
-
-            const vWidth = vMaxX - vMinX;
-            const vHeight = vMaxY - vMinY;
-            const svgWidth = vWidth * cellSize + (padding * 2);
-            const svgHeight = vHeight * cellSize + (padding * 2);
-
-            const container = document.createElement('div');
-            container.className = 'go-container';
-
-            let svg = `<svg viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">`;
-            
-            // Grid
-            svg += `<g stroke="${termGreen}" stroke-width="1" opacity="0.3">`;
-            for (let i = 0; i < size; i++) {
-                if (i >= vMinY && i <= vMaxY) {
-                    const yPos = padding + (i - vMinY) * cellSize;
-                    svg += `<line x1="${padding}" y1="${yPos}" x2="${svgWidth - padding}" y2="${yPos}" />`;
-                }
-                if (i >= vMinX && i <= vMaxX) {
-                    const xPos = padding + (i - vMinX) * cellSize;
-                    svg += `<line x1="${xPos}" y1="${padding}" x2="${xPos}" y2="${svgHeight - padding}" />`;
-                }
-            }
-            svg += `</g>`;
-
-            // Hoshi
-            const starPoints = [];
-            if (size === 19) starPoints.push({x:3,y:3},{x:9,y:3},{x:15,y:3},{x:3,y:9},{x:9,y:9},{x:15,y:9},{x:3,y:15},{x:9,y:15},{x:15,y:15});
-            starPoints.forEach(p => {
-                if (p.x >= vMinX && p.x <= vMaxX && p.y >= vMinY && p.y <= vMaxY) {
-                    svg += `<circle cx="${padding + (p.x - vMinX) * cellSize}" cy="${padding + (p.y - vMinY) * cellSize}" r="3" fill="${termGreen}" />`;
-                }
-            });
-
-            // Axis Labels (Uppercase)
-            svg += `<g fill="${termGreen}" font-size="12" font-family="'Fira Code', monospace" opacity="0.8">`;
-            for (let i = vMinX; i <= vMaxX; i++) svg += `<text x="${padding + (i - vMinX) * cellSize}" y="${svgHeight - 8}" text-anchor="middle">${String.fromCharCode(65 + i)}</text>`;
-            for (let i = vMinY; i <= vMaxY; i++) svg += `<text x="12" y="${padding + (i - vMinY) * cellSize + 4}" text-anchor="middle">${size - i}</text>`;
-            svg += `</g>`;
-
-            // Stones & Marks
-            stones.forEach(s => {
-                if (s.x >= vMinX && s.x <= vMaxX && s.y >= vMinY && s.y <= vMaxY) {
-                    const cx = padding + (s.x - vMinX) * cellSize;
-                    const cy = padding + (s.y - vMinY) * cellSize;
-                    const r = cellSize / 2 - 3;
-                    
-                    if (s.color === 'B') {
-                        svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#000" stroke="${termGreen}" stroke-width="1.5" />`;
-                        if (s.label) svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${termGreen}" font-size="11" font-weight="bold">${s.label}</text>`;
-                    } else if (s.color === 'W') {
-                        svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${termGreen}" />`;
-                        if (s.label) svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="#000" font-size="11" font-weight="bold">${s.label}</text>`;
-                    } else if (s.color === 'M') {
-                        svg += `<rect x="${cx - 8}" y="${cy - 8}" width="16" height="16" fill="#000" />`;
-                        svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${termGreen}" font-size="12" font-weight="bold">${s.label}</text>`;
-                    }
-                }
-            });
-
-            svg += `</svg>`;
-            container.innerHTML = svg;
-            return container;
-        }
-
-        function processAndDisplay(content) {
-            const goBlockRegex = /```go([\s\S]*?)```/g;
-            let lastIndex = 0;
-            let match;
-            let firstElement = null;
-
-            while ((match = goBlockRegex.exec(content)) !== null) {
-                const beforeText = content.substring(lastIndex, match.index).trim();
-                if (beforeText) {
-                    const el = print(beforeText);
-                    if (!firstElement) firstElement = el;
-                }
-
-                const inner = match[1].trim();
-                let size = 19, viewport = null, stones = [];
-                let rawLines = inner.split('\n');
-                
-                rawLines.forEach(line => {
-                    const sep = line.indexOf(':');
-                    if (sep === -1) return;
-                    const key = line.substring(0, sep).trim().toLowerCase();
-                    const val = line.substring(sep + 1).trim();
-                    if (key === 'size') size = parseInt(val) || 19;
-                    if (key === 'viewport') viewport = val;
-                    
-                    const colorMap = { 'black': 'B', 'white': 'W', 'marks': 'M' };
-                    if (colorMap[key]) {
-                        val.split(',').forEach(c => {
-                            const pos = parseCoord(c, size);
-                            if (pos) stones.push({ ...pos, color: colorMap[key] });
-                        });
-                    }
-                });
-
-                const board = createBoardSVG(size, stones, viewport);
-                outputElement.appendChild(board);
-                if (!firstElement) firstElement = board;
-                lastIndex = goBlockRegex.lastIndex;
-            }
-
-            const remainingText = content.substring(lastIndex).trim();
-            if (remainingText) {
-                const el = print(remainingText);
-                if (!firstElement) firstElement = el;
-            }
-
-            if (firstElement) {
-                setTimeout(() => {
-                    firstElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100); 
-            }
-        }
-
-        const commands = {
-            help: () => {
-                print("Commands: ls, cd, cat, pwd, clear, help");
-                print("Tip: Use multi-level paths: 'cd games/archives' or 'cd ../..'");
-            },
-            pwd: () => print("/" + currentPath.join('/')),
-            ls: () => {
-                const dir = getDirectory(currentPath);
-                if (!dir) return;
-                Object.keys(dir).forEach(item => {
-                    print(item + (dir[item].type === 'dir' ? '/' : ''), dir[item].type === 'dir' ? 'folder' : 'file');
-                });
-            },
-            cd: (args) => {
-                if (!args[0] || args[0] === "~") {
-                    currentPath = ["root"];
-                } else {
-                    const pathString = args[0];
-                    const parts = pathString.split('/').filter(p => p !== "" && p !== ".");
-                    let tempPath = pathString.startsWith('/') ? [] : [...currentPath];
-
-                    for (const part of parts) {
-                        if (part === "..") {
-                            if (tempPath.length > 0) tempPath.pop();
-                        } else {
-                            // Get directory contents of the current step to verify next step
-                            const currentDir = getDirectory(tempPath);
-                            if (currentDir && currentDir[part] && currentDir[part].type === 'dir') {
-                                tempPath.push(part);
-                            } else {
-                                print(`cd: no such directory: ${pathString}`, "error");
-                                return; // Abort the whole move if any part is invalid
-                            }
-                        }
-                    }
-                    currentPath = tempPath;
-                }
-                updatePrompt();
-            },
-            cat: async (args) => {
-                if (!args[0]) { print("cat: missing filename", "error"); return; }
-                const dir = getDirectory(currentPath);
-                const target = dir ? dir[args[0]] : null;
-                if (!target || target.type !== 'file') { print(`cat: ${args[0]}: No such file`, "error"); return; }
-                
-                let content = target.content;
-                if (target.url) {
-                    const loader = print(`Fetching ${target.url}...`, "loading");
-                    try {
-                        const res = await fetch(target.url);
-                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                        content = await res.text();
-                        loader.remove();
-                    } catch (e) { 
-                        loader.textContent = `cat: error loading ${target.url}`;
-                        loader.className = "output-line error";
-                        return; 
-                    }
-                }
-                processAndDisplay(content);
-            },
-            clear: () => outputElement.innerHTML = ''
-        };
 
         function getDirectory(pathArr) {
             let current = VIRTUAL_FS;
@@ -438,30 +205,87 @@
             return current;
         }
 
-        function updatePrompt() {
-            promptLabel.textContent = `psyche@brain:/${currentPath.join('/')}$`;
-        }
+        const commands = {
+            help: () => {
+                print("Commands: ls, cd, cat, pwd, clear, help");
+            },
+            pwd: () => {
+                const visual = currentPath.length === 1 ? "~" : "~/" + currentPath.slice(1).join('/');
+                print(visual);
+            },
+            ls: () => {
+                const dir = getDirectory(currentPath);
+                if (!dir) return;
+                const grid = document.createElement('div');
+                grid.className = 'ls-grid';
+                Object.keys(dir).forEach(item => {
+                    const span = document.createElement('span');
+                    span.className = dir[item].type === 'dir' ? 'folder' : 'file';
+                    span.textContent = item + (dir[item].type === 'dir' ? '/' : '');
+                    grid.appendChild(span);
+                });
+                outputElement.appendChild(grid);
+            },
+            cd: (args) => {
+                if (!args[0] || args[0] === "~") {
+                    currentPath = ["root"];
+                } else {
+                    const pathString = args[0];
+                    const parts = pathString.split('/').filter(p => p !== "" && p !== ".");
+                    let tempPath = pathString.startsWith('/') ? ["root"] : [...currentPath];
+                    if (pathString.startsWith('~')) {
+                        tempPath = ["root"];
+                        parts.shift(); // remove ~ part
+                    }
 
-        inputElement.addEventListener('keydown', async (e) => {
+                    for (const part of parts) {
+                        if (part === "..") {
+                            if (tempPath.length > 1) tempPath.pop();
+                        } else {
+                            const currentDir = getDirectory(tempPath);
+                            if (currentDir && currentDir[part] && currentDir[part].type === 'dir') {
+                                tempPath.push(part);
+                            } else {
+                                print(`cd: no such directory: ${pathString}`, "error");
+                                return;
+                            }
+                        }
+                    }
+                    currentPath = tempPath;
+                }
+                updatePrompt();
+            },
+            cat: (args) => {
+                if (!args[0]) { print("cat: missing filename", "error"); return; }
+                const dir = getDirectory(currentPath);
+                const target = dir ? dir[args[0]] : null;
+                if (!target || target.type !== 'file') { print(`cat: ${args[0]}: No such file`, "error"); return; }
+                print(target.content || "[Empty File]");
+            },
+            clear: () => outputElement.innerHTML = ''
+        };
+
+        inputElement.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                const val = inputElement.value.trim();
-                const [cmd, ...args] = val.split(/\s+/);
+                const val = inputElement.value;
+                const [cmd, ...args] = val.trim().split(/\s+/);
+                
                 const line = document.createElement('div');
                 line.className = 'output-line';
                 line.innerHTML = `<span class="prompt">${promptLabel.textContent}</span> ${val}`;
                 outputElement.appendChild(line);
+                
                 inputElement.value = '';
                 if (cmd) {
                     const action = commands[cmd.toLowerCase()];
-                    if (action) await action(args);
+                    if (action) action(args);
                     else print(`command not found: ${cmd}`, "error");
                 }
                 scrollToBottom();
             }
         });
 
-        // Ensure resizing window doesn't break scroll position
-        window.addEventListener('resize', scrollToBottom);
+        updatePrompt();
     </script>
 </body>
 </html>
