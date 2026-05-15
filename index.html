@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Terminal + Cyber Go & LaTeX Renderer</title>
+    <title>Brain Terminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -97,8 +97,8 @@
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">CyberBoard Engine v5.0.0 [LaTeX Protocol Initialized]</div>
-            <div class="output-line">Type 'ls' to browse or 'cat math_demo.md' to see LaTeX in action.</div>
+            <div class="output-line system">BrainTerminal v5.0.0 [LaTeX Protocol Initialized]</div>
+            <div class="output-line">Type 'help' for a list of available commands.</div>
             <div class="output-line">------------------------------------------------------------</div>
         </div>
         <div class="input-area">
@@ -300,7 +300,6 @@
         const commands = {
             help: () => {
                 print("Commands: ls, cd, cat, pwd, clear, help");
-                print("LaTeX: Use $...$ or $$...$$ in markdown files.");
             },
             pwd: () => print("/" + currentPath.join('/')),
             ls: () => {
