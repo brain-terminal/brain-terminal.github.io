@@ -130,14 +130,17 @@
             "home": {
                 type: "dir",
                 content: {
-                    "README.md": { type: "file", url: "README.md" },
-                    "Go": {
+                    "math_demo.md": { 
+                        type: "file", 
+                        content: "# Unified Rendering\n\n## 1. Responsive LaTeX\n$E = mc^2$\n\n$$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$\n\n## 2. Cyber Go Layout\n```go\nsize: 19\nviewport: M10-T19\nblack: Q16(1), R14(3), P17(5)\nwhite: D16(2), Q4(4)\nmarks: R16(A), Q17(B)\n```" 
+                    },
+                    "archives": {
                         type: "dir",
                         content: {
-                            "Beginner": {
+                            "2024": {
                                 type: "dir",
                                 content: {
-                                    "equipment.md": { type: "file", url: "Go/Beginner/equipment.md" }
+                                    "final_match.md": { type: "file", url: "final_match.md" }
                                 }
                             }
                         }
@@ -327,7 +330,8 @@
         const commands = {
             help: () => {
                 print("Commands: ls, cd, cat, pwd, clear, help");
-                print("Tip: Touch friendly. Go boards & LaTeX scale to your screen.");
+                print("Tip: Use multi-level paths: 'cd games/archives' or 'cd ../..'");
+                print("Go boards & LaTeX scale to your screen.");
             },
             pwd: () => print("/" + currentPath.join('/')),
             ls: () => {
@@ -338,12 +342,28 @@
                 });
             },
             cd: (args) => {
-                if (!args[0] || args[0] === "~") currentPath = ["home"];
-                else if (args[0] === "..") { if (currentPath.length > 1) currentPath.pop(); }
-                else {
-                    const dir = getDirectory(currentPath);
-                    if (dir && dir[args[0]] && dir[args[0]].type === 'dir') currentPath.push(args[0]);
-                    else print(`cd: no such directory: ${args[0]}`, "error");
+                if (!args[0] || args[0] === "~") {
+                    currentPath = ["home"];
+                } else {
+                    const pathString = args[0];
+                    const parts = pathString.split('/').filter(p => p !== "" && p !== ".");
+                    let tempPath = pathString.startsWith('/') ? [] : [...currentPath];
+
+                    for (const part of parts) {
+                        if (part === "..") {
+                            if (tempPath.length > 0) tempPath.pop();
+                        } else {
+                            // Get directory contents of the current step to verify next step
+                            const currentDir = getDirectory(tempPath);
+                            if (currentDir && currentDir[part] && currentDir[part].type === 'dir') {
+                                tempPath.push(part);
+                            } else {
+                                print(`cd: no such directory: ${pathString}`, "error");
+                                return; // Abort the whole move if any part is invalid
+                            }
+                        }
+                    }
+                    currentPath = tempPath;
                 }
                 updatePrompt();
             },
