@@ -117,7 +117,6 @@
         <div id="output">
             <div class="output-line system">BrainTerminal v6.0.0</div>
             <div class="output-line">Type 'help' for a list of available commands.</div>
-            <div class="output-line">------------------------------------------------------------</div>
         </div>
         <div class="input-area">
             <span class="prompt" id="prompt-label">psyche@brain:~$</span>
@@ -130,14 +129,31 @@
             "root": {
                 type: "dir",
                 content: {
-                    "math_demo.md": { 
+                    "README.md": { 
                         type: "file", 
-                        content: "# Unified Rendering\n\n## 1. Responsive LaTeX\n$E = mc^2$\n\n$$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$\n\n## 2. Cyber Go Layout\n```go\nsize: 19\nviewport: M10-T19\nblack: Q16(1), R14(3), P17(5)\nwhite: D16(2), Q4(4)\nmarks: R16(A), Q17(B)\n```" 
+                        url: "README.md" 
                     },
-                    "archives": {
+                    "synapses": {
                         type: "dir",
                         content: {
-                            "2024": {
+                            "go": {
+                                type: "dir",
+                                content: {
+                                    "introductory": { 
+                                        type: "dir", 
+                                        content: {
+                                            "final_match.md": { type: "file", url: "final_match.md" } 
+                                        }
+                                    }
+                                }
+                            },
+                             "japanese": {
+                                type: "dir",
+                                content: {
+                                    "final_match.md": { type: "file", url: "final_match.md" }
+                                }
+                            },
+                             "mathematics": {
                                 type: "dir",
                                 content: {
                                     "final_match.md": { type: "file", url: "final_match.md" }
