@@ -92,8 +92,9 @@
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">BrainTerminal v2.1.0</div>
+            <div class="output-line system">WebTerm v2.1.0 - Go Board Integration</div>
             <div class="output-line">Type 'help' to see available commands.</div>
+            <div class="output-line">GitHub-style Go blocks (```go) are supported in .md files.</div>
             <div class="output-line">------------------------------------------------------------</div>
         </div>
         <div class="input-area">
@@ -107,11 +108,15 @@
             "home": {
                 type: "dir",
                 content: {
-                    "README.md": { type: "file", url: "README.md" }
-                    "Go": {
+                    "readme.md": { 
+                        type: "file", 
+                        content: "# Welcome to the Go Hub\n\nThis terminal renders Go board blocks using GitHub syntax.\n\n```go\nsize: 9\nblack: d4, f4, d6, f6\nwhite: e5, e4, e6\n```\nNavigate to the /games folder for more." 
+                    },
+                    "games": {
                         type: "dir",
                         content: {
-                            "Test.md": { type: "file", url: "Go/Test.md" }
+                            "classic.md": { type: "file", url: "games/classic.md" },
+                            "joseki.md": { type: "file", url: "games/joseki.md" }
                         }
                     }
                 }
