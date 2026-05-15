@@ -108,7 +108,16 @@
             "home": {
                 type: "dir",
                 content: {
-                    "README.md": { type: "file", url: "README.md" }
+                    "readme.md": { 
+                        type: "file", 
+                        content: "# Welcome to the Go Hub\n\nThis terminal renders Go board blocks using GitHub syntax.\n\n```go\nsize: 9\nblack: d4, f4, d6, f6\nwhite: e5, e4, e6\n```\nNavigate to the /games folder for more." 
+                    },
+                    "games": {
+                        type: "dir",
+                        content: {
+                            "classic.md": { type: "file", url: "games/classic.md" },
+                            "joseki.md": { type: "file", url: "games/joseki.md" }
+                        }
                     }
                 }
             }
