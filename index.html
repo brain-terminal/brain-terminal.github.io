@@ -3,14 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BrainTerminal</title>
+    <title>Web Terminal + Go Board Renderer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
 
+        :root {
+            --term-bg: #0d0d0d;
+            --term-green: #00ff41;
+            --term-blue: #5dade2;
+            --term-white: #fdfefe;
+            --board-wood: #dbb06e;
+            --board-border: #8b5a2b;
+        }
+
         body {
-            background-color: #0d0d0d;
-            color: #00ff41;
+            background-color: var(--term-bg);
+            color: var(--term-green);
             font-family: 'Fira Code', monospace;
             margin: 0;
             overflow: hidden;
@@ -22,12 +31,14 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
+            scrollbar-gutter: stable;
         }
 
         .output-line {
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             white-space: pre-wrap;
             word-break: break-all;
+            line-height: 1.5;
         }
 
         .input-area {
@@ -37,77 +48,78 @@
         }
 
         .prompt {
-            color: #00ff41;
-            margin-right: 10px;
+            color: var(--term-green);
+            margin-right: 12px;
             white-space: nowrap;
+            font-weight: 500;
         }
 
         #cmd-input {
             background: transparent;
             border: none;
-            color: #00ff41;
+            color: var(--term-green);
             font-family: 'Fira Code', monospace;
             font-size: 1rem;
             outline: none;
             flex-grow: 1;
         }
 
-        /* Syntax Highlighting & Elements */
-        .folder { color: #5dade2; font-weight: bold; }
-        .file { color: #fdfefe; }
+        /* Elements & Highlighting */
+        .folder { color: var(--term-blue); font-weight: bold; }
+        .file { color: var(--term-white); }
         .error { color: #e74c3c; }
         .system { color: #f1c40f; }
         .loading { color: #888; font-style: italic; }
 
-        /* Go Board Styling */
         .go-container {
-            background: #dbb06e; /* Classic wood color */
-            border: 2px solid #8b5a2b;
-            border-radius: 4px;
+            background: var(--board-wood);
+            border: 2px solid var(--board-border);
+            border-radius: 6px;
             display: inline-block;
-            padding: 15px;
-            margin: 10px 0;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
         }
 
-        /* Custom Scrollbar */
+        /* Custom Scrollbar Styling */
         ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0d0d0d; }
+        ::-webkit-scrollbar-track { background: var(--term-bg); }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
     </style>
 </head>
 <body>
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">BrainTerminal v.1.0</div>
-            <div class="output-line">Type 'help' to see a list of commands.</div>
-            <div class="output-line">----------------------------------------</div>
+            <div class="output-line system">WebTerm v2.1.0 - Go Board Integration</div>
+            <div class="output-line">Type 'help' to see available commands.</div>
+            <div class="output-line">GitHub-style Go blocks (```go) are supported in .md files.</div>
+            <div class="output-line">------------------------------------------------------------</div>
         </div>
         <div class="input-area">
-            <span class="prompt" id="prompt-label">synapse@brain:~$</span>
+            <span class="prompt" id="prompt-label">visitor@web:~$</span>
             <input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false">
         </div>
     </div>
 
     <script>
         /**
-         * VIRTUAL_FS CONFIGURATION
-         * - Use 'url' to link to a real .md file on your server.
-         * - Use 'content' for hardcoded text.
+         * CONFIGURATION: 
+         * Add your folders and files here.
+         * For files, use 'content' for raw text OR 'url' to fetch from your server.
          */
         const VIRTUAL_FS = {
             "home": {
                 type: "dir",
                 content: {
+                    "README.md": { type: "file", url: README.md" },
                     "Go": {
                         type: "dir",
                         content: {
-                            // EDIT THESE URLS TO POINT TO YOUR ACTUAL FILES
-                            "Test.md": { type: "file", url: "/Go/Test.md" },
+                            "Test.md": { type: "file", url: "Go/Test.md" }
                         }
-                    },
-                    "README.md": { type: "file", url: "README.md" }
+                    }
                 }
             }
         };
@@ -143,9 +155,28 @@
             return current;
         }
 
-        function createBoardSVG(size, boardData) {
-            const cellSize = 28;
-            const padding = 20;
+        /**
+         * Converts alpha-numeric coordinates (e.g. "c3") to 0-indexed XY
+         * Column: a=0, b=1, c=2...
+         * Row: 1 is bottom, size is top.
+         */
+        function parseCoord(coord, size) {
+            coord = coord.trim().toLowerCase();
+            if (!coord) return null;
+
+            const colChar = coord.charAt(0);
+            const rowStr = coord.substring(1);
+
+            const x = colChar.charCodeAt(0) - 97;
+            const y = size - parseInt(rowStr); // Inverse for SVG top-down Y
+
+            if (isNaN(x) || isNaN(y) || x < 0 || x >= size || y < 0 || y >= size) return null;
+            return { x, y };
+        }
+
+        function createBoardSVG(size, stones) {
+            const cellSize = 30;
+            const padding = 30;
             const totalSize = (size - 1) * cellSize + (padding * 2);
             
             const wrapper = document.createElement('div');
@@ -153,8 +184,8 @@
 
             let svg = `<svg width="${totalSize}" height="${totalSize}" viewBox="0 0 ${totalSize} ${totalSize}" xmlns="http://www.w3.org/2000/svg">`;
             
-            // Draw Grid Lines
-            svg += `<g stroke="#444" stroke-width="1">`;
+            // Grid Lines
+            svg += `<g stroke="#222" stroke-width="1.2" opacity="0.7">`;
             for (let i = 0; i < size; i++) {
                 // Horizontal
                 svg += `<line x1="${padding}" y1="${padding + i * cellSize}" x2="${totalSize - padding}" y2="${padding + i * cellSize}" />`;
@@ -163,20 +194,39 @@
             }
             svg += `</g>`;
 
-            // Draw Stones
-            boardData.forEach((line, y) => {
-                const stones = line.split(/\s+/);
-                stones.forEach((stone, x) => {
-                    if (x >= size || y >= size) return;
-                    const cx = padding + x * cellSize;
-                    const cy = padding + y * cellSize;
+            // Star Points (Hoshi) - common for 9, 13, 19
+            const starPoints = [];
+            if (size === 19) starPoints.push({x:3,y:3},{x:9,y:3},{x:15,y:3},{x:3,y:9},{x:9,y:9},{x:15,y:9},{x:3,y:15},{x:9,y:15},{x:15,y:15});
+            else if (size === 13) starPoints.push({x:3,y:3},{x:9,y:3},{x:3,y:9},{x:9,y:9},{x:6,y:6});
+            else if (size === 9) starPoints.push({x:2,y:2},{x:6,y:2},{x:2,y:6},{x:6,y:6},{x:4,y:4});
 
-                    if (stone.toUpperCase() === 'B') {
-                        svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="#111" />`;
-                    } else if (stone.toUpperCase() === 'W') {
-                        svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="#fff" stroke="#ccc" />`;
-                    }
-                });
+            starPoints.forEach(p => {
+                svg += `<circle cx="${padding + p.x * cellSize}" cy="${padding + p.y * cellSize}" r="3" fill="#222" />`;
+            });
+
+            // Axis Labels
+            svg += `<g fill="#443322" font-size="12" font-family="monospace" font-weight="bold">`;
+            for (let i = 0; i < size; i++) {
+                // X (a, b, c...)
+                svg += `<text x="${padding + i * cellSize}" y="${totalSize - 8}" text-anchor="middle">${String.fromCharCode(97 + i)}</text>`;
+                // Y (1, 2, 3...)
+                svg += `<text x="12" y="${padding + i * cellSize + 4}" text-anchor="middle">${size - i}</text>`;
+            }
+            svg += `</g>`;
+
+            // Stones
+            stones.forEach(s => {
+                const cx = padding + s.x * cellSize;
+                const cy = padding + s.y * cellSize;
+                if (s.color === 'B') {
+                    // Black Stone with slight gradient/shading
+                    svg += `<defs><radialGradient id="gradB"><stop offset="30%" stop-color="#444"/><stop offset="100%" stop-color="#000"/></radialGradient></defs>`;
+                    svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="url(#gradB)" filter="drop-shadow(2px 2px 2px rgba(0,0,0,0.4))" />`;
+                } else {
+                    // White Stone with slight gradient/shading
+                    svg += `<defs><radialGradient id="gradW"><stop offset="70%" stop-color="#fff"/><stop offset="100%" stop-color="#ccc"/></radialGradient></defs>`;
+                    svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="url(#gradW)" stroke="#999" stroke-width="0.5" filter="drop-shadow(2px 2px 2px rgba(0,0,0,0.2))" />`;
+                }
             });
 
             svg += `</svg>`;
@@ -185,32 +235,48 @@
         }
 
         function processAndDisplay(content) {
-            const boardRegex = /\[go-board\]([\s\S]*?)\[\/go-board\]/g;
+            // Updated Regex to specifically target GitHub style ```go blocks
+            const goBlockRegex = /```go([\s\S]*?)```/g;
             
-            // Split by boards so we can render text and boards in sequence
             let lastIndex = 0;
             let match;
 
-            while ((match = boardRegex.exec(content)) !== null) {
-                // 1. Print text before the board
+            while ((match = goBlockRegex.exec(content)) !== null) {
+                // 1. Print any text appearing before the code block
                 const beforeText = content.substring(lastIndex, match.index).trim();
                 if (beforeText) print(beforeText);
 
-                // 2. Parse board data
-                const boardBlock = match[1].trim().split('\n');
+                // 2. Parse the Go block content
+                const inner = match[1].trim();
                 let size = 19;
-                let boardLines = [];
+                let stones = [];
 
-                boardBlock.forEach(l => {
-                    if (l.toLowerCase().startsWith('size:')) size = parseInt(l.split(':')[1]);
-                    if (l.includes('.') || l.includes('B') || l.includes('W')) boardLines.push(l.trim());
+                const lines = inner.split('\n');
+                lines.forEach(line => {
+                    const separatorIndex = line.indexOf(':');
+                    if (separatorIndex === -1) return;
+
+                    const key = line.substring(0, separatorIndex).trim().toLowerCase();
+                    const val = line.substring(separatorIndex + 1).trim();
+
+                    if (key === 'size') {
+                        size = parseInt(val) || 19;
+                    } else if (key === 'black' || key === 'white') {
+                        const color = (key === 'black') ? 'B' : 'W';
+                        const coords = val.split(',');
+                        coords.forEach(c => {
+                            const pos = parseCoord(c, size);
+                            if (pos) stones.push({ ...pos, color });
+                        });
+                    }
                 });
 
-                outputElement.appendChild(createBoardSVG(size, boardLines));
-                lastIndex = boardRegex.lastIndex;
+                // 3. Append the rendered SVG board
+                outputElement.appendChild(createBoardSVG(size, stones));
+                lastIndex = goBlockRegex.lastIndex;
             }
 
-            // 3. Print remaining text
+            // 4. Print any remaining text after the last block
             const remainingText = content.substring(lastIndex).trim();
             if (remainingText) print(remainingText);
             
@@ -219,34 +285,48 @@
 
         const commands = {
             help: () => {
-                print("Commands: ls, cd, cat, pwd, clear, help");
+                print("Available commands:");
+                print("  ls      - List files in current directory");
+                print("  cd      - Change directory (e.g., 'cd games' or 'cd ..')");
+                print("  cat     - View file (fetches live .md and renders Go boards)");
+                print("  pwd     - Show current path");
+                print("  clear   - Clear the terminal");
             },
             pwd: () => print("/" + currentPath.join('/')),
             ls: () => {
                 const dir = getDirectory(currentPath);
+                if (!dir) return;
                 Object.keys(dir).forEach(item => {
-                    print(item + (dir[item].type === 'dir' ? '/' : ''), dir[item].type === 'dir' ? 'folder' : 'file');
+                    const isDir = dir[item].type === 'dir';
+                    print(item + (isDir ? '/' : ''), isDir ? 'folder' : 'file');
                 });
             },
             cd: (args) => {
-                if (!args[0] || args[0] === "~") currentPath = ["home"];
-                else if (args[0] === "..") { if (currentPath.length > 1) currentPath.pop(); }
-                else {
+                if (!args[0] || args[0] === "~") {
+                    currentPath = ["home"];
+                } else if (args[0] === "..") {
+                    if (currentPath.length > 1) currentPath.pop();
+                } else {
                     const dir = getDirectory(currentPath);
-                    if (dir[args[0]] && dir[args[0]].type === 'dir') currentPath.push(args[0]);
-                    else print(`cd: no such directory: ${args[0]}`, "error");
+                    if (dir && dir[args[0]] && dir[args[0]].type === 'dir') {
+                        currentPath.push(args[0]);
+                    } else {
+                        print(`cd: no such directory: ${args[0]}`, "error");
+                    }
                 }
             },
             cat: async (args) => {
-                if (!args[0]) { print("cat: missing file", "error"); return; }
+                if (!args[0]) { print("cat: missing filename", "error"); return; }
                 const dir = getDirectory(currentPath);
-                const target = dir[args[0]];
+                const target = dir ? dir[args[0]] : null;
 
-                if (!target || target.type !== 'file') { print(`cat: ${args[0]}: No such file`, "error"); return; }
+                if (!target || target.type !== 'file') {
+                    print(`cat: ${args[0]}: No such file`, "error");
+                    return;
+                }
 
                 let content = target.content;
-                
-                // If the file has a URL, fetch it live
+                // Fetch external file if URL is provided
                 if (target.url) {
                     const loader = print(`Fetching ${target.url}...`, "loading");
                     try {
@@ -255,12 +335,11 @@
                         content = await res.text();
                         loader.remove();
                     } catch (e) { 
-                        loader.textContent = `cat: error fetching ${target.url} (${e.message})`;
+                        loader.textContent = `cat: error loading ${target.url} (${e.message})`;
                         loader.className = "output-line error";
                         return; 
                     }
                 }
-
                 processAndDisplay(content);
             },
             clear: () => outputElement.innerHTML = ''
@@ -276,18 +355,22 @@
                 line.className = 'output-line';
                 line.innerHTML = `<span class="prompt">${promptLabel.textContent}</span> ${val}`;
                 outputElement.appendChild(line);
-
+                
                 inputElement.value = '';
-                if (cmd && commands[cmd.toLowerCase()]) {
-                    await commands[cmd.toLowerCase()](args);
-                } else if (cmd) {
-                    print(`command not found: ${cmd}`, "error");
+
+                if (cmd) {
+                    const action = commands[cmd.toLowerCase()];
+                    if (action) await action(args);
+                    else print(`command not found: ${cmd}`, "error");
                 }
 
-                promptLabel.textContent = `synapse@brain:/${currentPath.join('/')}$`;
+                promptLabel.textContent = `visitor@web:/${currentPath.join('/')}$`;
                 scrollToBottom();
             }
         });
+
+        // Auto-scroll on resize
+        window.addEventListener('resize', scrollToBottom);
     </script>
 </body>
 </html>
