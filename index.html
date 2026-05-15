@@ -25,6 +25,283 @@
         }
 
         .output-line {
+            margin-bottom: 8px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .input-area {
+            display: flex;
+            align-items: center;
+            margin-top: 5px;
+        }
+
+        .prompt {
+            color: #00ff41;
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+
+        #cmd-input {
+            background: transparent;
+            border: none;
+            color: #00ff41;
+            font-family: 'Fira Code', monospace;
+            font-size: 1rem;
+            outline: none;
+            flex-grow: 1;
+        }
+
+        .folder { color: #5dade2; font-weight: bold; }
+        .file { color: #fdfefe; }
+        .error { color: #e74c3c; }
+        .system { color: #f1c40f; }
+        .loading { color: #888; font-style: italic; }
+
+        /* Go Board Styling */
+        .go-container {
+            background: #dbb06e; /* Classic wood color */
+            border: 2px solid #8b5a2b;
+            border-radius: 4px;
+            display: inline-block;
+            padding: 15px;
+            margin: 10px 0;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0d0d0d; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <div id="terminal" onclick="focusInput()">
+        <div id="output">
+            <div class="output-line system">WebTerm v1.2.0 - Go Board Plugin Enabled</div>
+            <div class="output-line">Type 'cat game.md' to see the renderer in action.</div>
+            <div class="output-line">----------------------------------------</div>
+        </div>
+        <div class="input-area">
+            <span class="prompt" id="prompt-label">visitor@web:~$</span>
+            <input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false">
+        </div>
+    </div>
+
+    <script>
+        const VIRTUAL_FS = {
+            "home": {
+                type: "dir",
+                content: {
+                    "game.md": { 
+                        type: "file", 
+                        // Example embedded content showing the syntax
+                        content: "# Match 1\n[go-board]\nsize: 9\ndata:\n. . . . . . . . .\n. . . . . . . . .\n. . B W . . . . .\n. . . B . . . . .\n. . . . . . . . .\n. . . . . . . . .\n. . . . . . . . .\n. . . . . . . . .\n. . . . . . . . .\n[/go-board]\n\nEnd of record."
+                    },
+                    "notes": {
+                        type: "dir",
+                        content: {
+                            "tutorial.md": { type: "file", url: "tutorial.md" }
+                        }
+                    }
+                }
+            }
+        };
+
+        let currentPath = ["home"];
+        const outputElement = document.getElementById('output');
+        const inputElement = document.getElementById('cmd-input');
+        const promptLabel = document.getElementById('prompt-label');
+
+        function focusInput() { inputElement.focus(); }
+
+        function scrollToBottom() {
+            const term = document.getElementById('terminal');
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function print(text, className = "") {
+            const line = document.createElement('div');
+            line.className = `output-line ${className}`;
+            line.textContent = text;
+            outputElement.appendChild(line);
+            scrollToBottom();
+            return line;
+        }
+
+        function getDirectory(pathArr) {
+            let current = VIRTUAL_FS;
+            for (const part of pathArr) {
+                if (current[part] && current[part].type === 'dir') {
+                    current = current[part].content;
+                } else { return null; }
+            }
+            return current;
+        }
+
+        function renderGoBoard(content) {
+            const regex = /\[go-board\]([\s\S]*?)\[\/go-board\]/g;
+            let match;
+            const container = document.createElement('div');
+            
+            // Split content by the board tags to keep text around the board
+            const parts = content.split(regex);
+            
+            parts.forEach((part, index) => {
+                if (index % 2 === 0) {
+                    // This is regular text
+                    if (part.trim()) {
+                        const textNode = document.createElement('div');
+                        textNode.textContent = part.trim();
+                        container.appendChild(textNode);
+                    }
+                } else {
+                    // This is board data
+                    const lines = part.trim().split('\n');
+                    let size = 19;
+                    let boardLines = [];
+
+                    lines.forEach(l => {
+                        if (l.startsWith('size:')) size = parseInt(l.split(':')[1]);
+                        if (l.includes('.') || l.includes('B') || l.includes('W')) boardLines.push(l.trim());
+                    });
+
+                    container.appendChild(createBoardSVG(size, boardLines));
+                }
+            });
+
+            outputElement.appendChild(container);
+            scrollToBottom();
+        }
+
+        function createBoardSVG(size, boardData) {
+            const cellSize = 30;
+            const padding = 20;
+            const totalSize = (size - 1) * cellSize + (padding * 2);
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'go-container';
+
+            let svg = `<svg width="${totalSize}" height="${totalSize}" viewBox="0 0 ${totalSize} ${totalSize}" xmlns="http://www.w3.org/2000/svg">`;
+            
+            // Draw Grid Lines
+            svg += `<g stroke="#444" stroke-width="1">`;
+            for (let i = 0; i < size; i++) {
+                // Horizontal
+                svg += `<line x1="${padding}" y1="${padding + i * cellSize}" x2="${totalSize - padding}" y2="${padding + i * cellSize}" />`;
+                // Vertical
+                svg += `<line x1="${padding + i * cellSize}" y1="${padding}" x2="${padding + i * cellSize}" y2="${totalSize - padding}" />`;
+            }
+            svg += `</g>`;
+
+            // Draw Stones
+            boardData.forEach((line, y) => {
+                const stones = line.split(/\s+/);
+                stones.forEach((stone, x) => {
+                    if (x >= size || y >= size) return;
+                    const cx = padding + x * cellSize;
+                    const cy = padding + y * cellSize;
+
+                    if (stone.toUpperCase() === 'B') {
+                        svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="black" />`;
+                    } else if (stone.toUpperCase() === 'W') {
+                        svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="white" stroke="#ccc" />`;
+                    }
+                });
+            });
+
+            svg += `</svg>`;
+            wrapper.innerHTML = svg;
+            return wrapper;
+        }
+
+        const commands = {
+            help: () => {
+                print("Commands: ls, cd, cat, pwd, clear, help");
+                print("Go Board Syntax: Wrap grid in [go-board] tags inside your .md files.");
+            },
+            pwd: () => print("/" + currentPath.join('/')),
+            ls: () => {
+                const dir = getDirectory(currentPath);
+                Object.keys(dir).forEach(item => {
+                    print(item + (dir[item].type === 'dir' ? '/' : ''), dir[item].type === 'dir' ? 'folder' : 'file');
+                });
+            },
+            cd: (args) => {
+                if (!args[0] || args[0] === "~") currentPath = ["home"];
+                else if (args[0] === "..") { if (currentPath.length > 1) currentPath.pop(); }
+                else {
+                    const dir = getDirectory(currentPath);
+                    if (dir[args[0]] && dir[args[0]].type === 'dir') currentPath.push(args[0]);
+                    else print(`cd: no such directory: ${args[0]}`, "error");
+                }
+            },
+            cat: async (args) => {
+                if (!args[0]) { print("cat: missing file", "error"); return; }
+                const dir = getDirectory(currentPath);
+                const target = dir[args[0]];
+
+                if (!target || target.type !== 'file') { print(`cat: ${args[0]}: Not a file`, "error"); return; }
+
+                let content = target.content;
+                if (target.url) {
+                    const loader = print(`Fetching ${target.url}...`, "loading");
+                    try {
+                        const res = await fetch(target.url);
+                        content = await res.text();
+                        loader.remove();
+                    } catch (e) { loader.textContent = "Error loading file."; return; }
+                }
+
+                // Check if content contains Go Board markers
+                if (content.includes('[go-board]')) {
+                    renderGoBoard(content);
+                } else {
+                    print(content);
+                }
+            },
+            clear: () => outputElement.innerHTML = ''
+        };
+
+        inputElement.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                const val = inputElement.value.trim();
+                const [cmd, ...args] = val.split(/\s+/);
+                
+                const line = document.createElement('div');
+                line.className = 'output-line';
+                line.innerHTML = `<span class="prompt">${promptLabel.textContent}</span> ${val}`;
+                outputElement.appendChild(line);
+
+                inputElement.value = '';
+                if (cmd && commands[cmd.toLowerCase()]) await commands[cmd.toLowerCase()](args);
+                else if (cmd) print(`command not found: ${cmd}`, "error");
+
+                promptLabel.textContent = `visitor@web:/${currentPath.join('/')}$`;
+                scrollToBottom();
+            }
+        });
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+
+        body {
+            background-color: #0d0d0d;
+            color: #00ff41;
+            font-family: 'Fira Code', monospace;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #terminal {
+            height: 100vh;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .output-line {
             margin-bottom: 4px;
             white-space: pre-wrap;
             word-break: break-all;
