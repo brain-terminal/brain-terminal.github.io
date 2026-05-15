@@ -127,7 +127,7 @@
 
     <script>
         const VIRTUAL_FS = {
-            "home": {
+            "root": {
                 type: "dir",
                 content: {
                     "math_demo.md": { 
@@ -149,7 +149,7 @@
             }
         };
 
-        let currentPath = ["home"];
+        let currentPath = ["root"];
         const outputElement = document.getElementById('output');
         const inputElement = document.getElementById('cmd-input');
         const promptLabel = document.getElementById('prompt-label');
@@ -342,7 +342,7 @@
             },
             cd: (args) => {
                 if (!args[0] || args[0] === "~") {
-                    currentPath = ["home"];
+                    currentPath = ["root"];
                 } else {
                     const pathString = args[0];
                     const parts = pathString.split('/').filter(p => p !== "" && p !== ".");
