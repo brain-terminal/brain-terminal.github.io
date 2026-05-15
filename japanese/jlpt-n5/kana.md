@@ -9,7 +9,7 @@ a, sounds like "ah" as in father
 i, sounds like "ee" as in see
 u, sounds like "oo" as in food
 e, sounds like "eh" as in red
-o, sound like "oh" as in boat
+o, sound like "oh" as in boat 
 
 あ　い　う　え　お　<--- a, i, u, e, o
 か　き　く　け　こ　<--- ka, ki, ku, ke, ko 
