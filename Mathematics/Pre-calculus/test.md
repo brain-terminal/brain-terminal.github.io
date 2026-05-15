@@ -1,2 +1,2 @@
 This is an image:
-![test](Resources/Images/test.png)
+![test](../../Resources/Images/test.png)
