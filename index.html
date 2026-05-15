@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Terminal + Go Renderer</title>
+    <title>BrainTerminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
@@ -80,12 +80,12 @@
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">WebTerm v1.5.0 - Go Board Plugin Enabled</div>
-            <div class="output-line">Type 'ls' to see files or 'cat' to view .md files.</div>
+            <div class="output-line system">BrainTerminal v.1.0</div>
+            <div class="output-line">Type 'help' to see a list of commands.</div>
             <div class="output-line">----------------------------------------</div>
         </div>
         <div class="input-area">
-            <span class="prompt" id="prompt-label">visitor@web:~$</span>
+            <span class="prompt" id="prompt-label">synapse@brain:~$</span>
             <input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false">
         </div>
     </div>
@@ -220,7 +220,6 @@
         const commands = {
             help: () => {
                 print("Commands: ls, cd, cat, pwd, clear, help");
-                print("Go Board: Embed [go-board] blocks in linked .md files.");
             },
             pwd: () => print("/" + currentPath.join('/')),
             ls: () => {
