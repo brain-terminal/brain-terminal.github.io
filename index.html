@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Terminal - File Loader</title>
+    <title>Web Terminal + Go Renderer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
@@ -52,6 +52,7 @@
             flex-grow: 1;
         }
 
+        /* Syntax Highlighting & Elements */
         .folder { color: #5dade2; font-weight: bold; }
         .file { color: #fdfefe; }
         .error { color: #e74c3c; }
@@ -66,6 +67,7 @@
             display: inline-block;
             padding: 15px;
             margin: 10px 0;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
         /* Custom Scrollbar */
@@ -78,8 +80,8 @@
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">WebTerm v1.2.0 - Go Board Plugin Enabled</div>
-            <div class="output-line">Type 'cat game.md' to see the renderer in action.</div>
+            <div class="output-line system">WebTerm v1.5.0 - Go Board Plugin Enabled</div>
+            <div class="output-line">Type 'ls' to see files or 'cat' to view .md files.</div>
             <div class="output-line">----------------------------------------</div>
         </div>
         <div class="input-area">
@@ -89,21 +91,23 @@
     </div>
 
     <script>
+        /**
+         * VIRTUAL_FS CONFIGURATION
+         * - Use 'url' to link to a real .md file on your server.
+         * - Use 'content' for hardcoded text.
+         */
         const VIRTUAL_FS = {
             "home": {
                 type: "dir",
                 content: {
-                    "game.md": { 
-                        type: "file", 
-                        // Example embedded content showing the syntax
-                        content: "# Match 1\n[go-board]\nsize: 9\ndata:\n. . . . . . . . .\n. . . . . . . . .\n. . B W . . . . .\n. . . B . . . . .\n. . . . . . . . .\n. . . . . . . . .\n. . . . . . . . .\n. . . . . . . . .\n. . . . . . . . .\n[/go-board]\n\nEnd of record."
-                    },
-                    "notes": {
+                    "Go": {
                         type: "dir",
                         content: {
-                            "tutorial.md": { type: "file", url: "tutorial.md" }
+                            // EDIT THESE URLS TO POINT TO YOUR ACTUAL FILES
+                            "Test.md": { type: "file", url: "/Go/Test.md" },
                         }
-                    }
+                    },
+                    "README.md": { type: "file", url: "README.md" }
                 }
             }
         };
@@ -139,43 +143,8 @@
             return current;
         }
 
-        function renderGoBoard(content) {
-            const regex = /\[go-board\]([\s\S]*?)\[\/go-board\]/g;
-            let match;
-            const container = document.createElement('div');
-            
-            // Split content by the board tags to keep text around the board
-            const parts = content.split(regex);
-            
-            parts.forEach((part, index) => {
-                if (index % 2 === 0) {
-                    // This is regular text
-                    if (part.trim()) {
-                        const textNode = document.createElement('div');
-                        textNode.textContent = part.trim();
-                        container.appendChild(textNode);
-                    }
-                } else {
-                    // This is board data
-                    const lines = part.trim().split('\n');
-                    let size = 19;
-                    let boardLines = [];
-
-                    lines.forEach(l => {
-                        if (l.startsWith('size:')) size = parseInt(l.split(':')[1]);
-                        if (l.includes('.') || l.includes('B') || l.includes('W')) boardLines.push(l.trim());
-                    });
-
-                    container.appendChild(createBoardSVG(size, boardLines));
-                }
-            });
-
-            outputElement.appendChild(container);
-            scrollToBottom();
-        }
-
         function createBoardSVG(size, boardData) {
-            const cellSize = 30;
+            const cellSize = 28;
             const padding = 20;
             const totalSize = (size - 1) * cellSize + (padding * 2);
             
@@ -203,9 +172,9 @@
                     const cy = padding + y * cellSize;
 
                     if (stone.toUpperCase() === 'B') {
-                        svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="black" />`;
+                        svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="#111" />`;
                     } else if (stone.toUpperCase() === 'W') {
-                        svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="white" stroke="#ccc" />`;
+                        svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="#fff" stroke="#ccc" />`;
                     }
                 });
             });
@@ -215,10 +184,43 @@
             return wrapper;
         }
 
+        function processAndDisplay(content) {
+            const boardRegex = /\[go-board\]([\s\S]*?)\[\/go-board\]/g;
+            
+            // Split by boards so we can render text and boards in sequence
+            let lastIndex = 0;
+            let match;
+
+            while ((match = boardRegex.exec(content)) !== null) {
+                // 1. Print text before the board
+                const beforeText = content.substring(lastIndex, match.index).trim();
+                if (beforeText) print(beforeText);
+
+                // 2. Parse board data
+                const boardBlock = match[1].trim().split('\n');
+                let size = 19;
+                let boardLines = [];
+
+                boardBlock.forEach(l => {
+                    if (l.toLowerCase().startsWith('size:')) size = parseInt(l.split(':')[1]);
+                    if (l.includes('.') || l.includes('B') || l.includes('W')) boardLines.push(l.trim());
+                });
+
+                outputElement.appendChild(createBoardSVG(size, boardLines));
+                lastIndex = boardRegex.lastIndex;
+            }
+
+            // 3. Print remaining text
+            const remainingText = content.substring(lastIndex).trim();
+            if (remainingText) print(remainingText);
+            
+            scrollToBottom();
+        }
+
         const commands = {
             help: () => {
                 print("Commands: ls, cd, cat, pwd, clear, help");
-                print("Go Board Syntax: Wrap grid in [go-board] tags inside your .md files.");
+                print("Go Board: Embed [go-board] blocks in linked .md files.");
             },
             pwd: () => print("/" + currentPath.join('/')),
             ls: () => {
@@ -241,24 +243,26 @@
                 const dir = getDirectory(currentPath);
                 const target = dir[args[0]];
 
-                if (!target || target.type !== 'file') { print(`cat: ${args[0]}: Not a file`, "error"); return; }
+                if (!target || target.type !== 'file') { print(`cat: ${args[0]}: No such file`, "error"); return; }
 
                 let content = target.content;
+                
+                // If the file has a URL, fetch it live
                 if (target.url) {
                     const loader = print(`Fetching ${target.url}...`, "loading");
                     try {
                         const res = await fetch(target.url);
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
                         content = await res.text();
                         loader.remove();
-                    } catch (e) { loader.textContent = "Error loading file."; return; }
+                    } catch (e) { 
+                        loader.textContent = `cat: error fetching ${target.url} (${e.message})`;
+                        loader.className = "output-line error";
+                        return; 
+                    }
                 }
 
-                // Check if content contains Go Board markers
-                if (content.includes('[go-board]')) {
-                    renderGoBoard(content);
-                } else {
-                    print(content);
-                }
+                processAndDisplay(content);
             },
             clear: () => outputElement.innerHTML = ''
         };
@@ -268,283 +272,23 @@
                 const val = inputElement.value.trim();
                 const [cmd, ...args] = val.split(/\s+/);
                 
+                // Echo command
                 const line = document.createElement('div');
                 line.className = 'output-line';
                 line.innerHTML = `<span class="prompt">${promptLabel.textContent}</span> ${val}`;
                 outputElement.appendChild(line);
 
                 inputElement.value = '';
-                if (cmd && commands[cmd.toLowerCase()]) await commands[cmd.toLowerCase()](args);
-                else if (cmd) print(`command not found: ${cmd}`, "error");
+                if (cmd && commands[cmd.toLowerCase()]) {
+                    await commands[cmd.toLowerCase()](args);
+                } else if (cmd) {
+                    print(`command not found: ${cmd}`, "error");
+                }
 
                 promptLabel.textContent = `visitor@web:/${currentPath.join('/')}$`;
                 scrollToBottom();
             }
         });
-    </script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
-
-        body {
-            background-color: #0d0d0d;
-            color: #00ff41;
-            font-family: 'Fira Code', monospace;
-            margin: 0;
-            overflow: hidden;
-        }
-
-        #terminal {
-            height: 100vh;
-            padding: 20px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .output-line {
-            margin-bottom: 4px;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-
-        .input-area {
-            display: flex;
-            align-items: center;
-            margin-top: 5px;
-        }
-
-        .prompt {
-            color: #00ff41;
-            margin-right: 10px;
-            white-space: nowrap;
-        }
-
-        #cmd-input {
-            background: transparent;
-            border: none;
-            color: #00ff41;
-            font-family: 'Fira Code', monospace;
-            font-size: 1rem;
-            outline: none;
-            flex-grow: 1;
-        }
-
-        .folder { color: #5dade2; font-weight: bold; }
-        .file { color: #fdfefe; }
-        .error { color: #e74c3c; }
-        .system { color: #f1c40f; }
-        .loading { color: #888; font-style: italic; }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0d0d0d; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #444; }
-    </style>
-</head>
-<body>
-
-    <div id="terminal" onclick="focusInput()">
-        <div id="output">
-            <div class="output-line system">Welcome to WebTerm v1.1.0 (Live File Support)</div>
-            <div class="output-line">Type 'help' to see available commands.</div>
-            <div class="output-line">----------------------------------------</div>
-        </div>
-        <div class="input-area">
-            <span class="prompt" id="prompt-label">visitor@web:~$</span>
-            <input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false">
-        </div>
-    </div>
-
-    <script>
-        /**
-         * CONFIGURATION: 
-         * Update this object to match your website's file structure.
-         * For .md files, simply point 'url' to the file location.
-         */
-        const VIRTUAL_FS = {
-            "home": {
-                type: "dir",
-                content: {
-                    "README.md": { 
-                        type: "file", 
-                        url: "README.md" // Points to README.md in your root folder
-                    },
-                    "Go": {
-                        type: "dir",
-                        content: {
-                            "ideas.md": { type: "file", url: "notes/ideas.md" },
-                            "todo.md": { type: "file", url: "notes/todo.md" }
-                        }
-                    },
-                    "Japanese": {
-                        type: "dir",
-                        content: {
-                            "ideas.md": { type: "file", url: "notes/ideas.md" },
-                            "todo.md": { type: "file", url: "notes/todo.md" }
-                        }
-                    },
-                    "Mathematics": {
-                        type: "dir",
-                        content: {
-                            "ideas.md": { type: "file", url: "notes/ideas.md" },
-                            "todo.md": { type: "file", url: "notes/todo.md" }
-                        }
-                    },
-                }
-            }
-        };
-
-        let currentPath = ["home"];
-        const outputElement = document.getElementById('output');
-        const inputElement = document.getElementById('cmd-input');
-        const promptLabel = document.getElementById('prompt-label');
-
-        function focusInput() {
-            inputElement.focus();
-        }
-
-        function getDirectory(pathArr) {
-            let current = VIRTUAL_FS;
-            for (const part of pathArr) {
-                if (current[part] && current[part].type === 'dir') {
-                    current = current[part].content;
-                } else {
-                    return null;
-                }
-            }
-            return current;
-        }
-
-        function print(text, className = "") {
-            const line = document.createElement('div');
-            line.className = `output-line ${className}`;
-            line.textContent = text;
-            outputElement.appendChild(line);
-            scrollToBottom();
-            return line; // Return element so we can update it (useful for loaders)
-        }
-
-        function scrollToBottom() {
-            const term = document.getElementById('terminal');
-            term.scrollTop = term.scrollHeight;
-        }
-
-        function updatePrompt() {
-            promptLabel.textContent = `visitor@web:/${currentPath.join('/')}$`;
-        }
-
-        const commands = {
-            help: () => {
-                print("Available commands:");
-                print("  ls      - List files and directories");
-                print("  cd      - Change directory");
-                print("  cat     - Read file content (fetches from server if linked)");
-                print("  pwd     - Print working directory");
-                print("  clear   - Clear terminal screen");
-            },
-            pwd: () => {
-                print("/" + currentPath.join('/'));
-            },
-            ls: () => {
-                const dir = getDirectory(currentPath);
-                const items = Object.keys(dir);
-                if (items.length === 0) return;
-                
-                items.forEach(item => {
-                    const type = dir[item].type === 'dir' ? 'folder' : 'file';
-                    const suffix = dir[item].type === 'dir' ? '/' : '';
-                    print(item + suffix, type);
-                });
-            },
-            cd: (args) => {
-                if (!args[0] || args[0] === "~") {
-                    currentPath = ["home"];
-                } else if (args[0] === "..") {
-                    if (currentPath.length > 1) currentPath.pop();
-                } else {
-                    const dir = getDirectory(currentPath);
-                    if (dir[args[0]] && dir[args[0]].type === 'dir') {
-                        currentPath.push(args[0]);
-                    } else {
-                        print(`cd: no such directory: ${args[0]}`, "error");
-                    }
-                }
-            },
-            cat: async (args) => {
-                if (!args[0]) {
-                    print("cat: missing file operand", "error");
-                    return;
-                }
-                const dir = getDirectory(currentPath);
-                const target = dir[args[0]];
-
-                if (!target) {
-                    print(`cat: ${args[0]}: No such file`, "error");
-                    return;
-                }
-
-                if (target.type !== 'file') {
-                    print(`cat: ${args[0]}: Is a directory`, "error");
-                    return;
-                }
-
-                // If it's a URL (like a .md file), fetch it
-                if (target.url) {
-                    const loadingLine = print(`Reading ${target.url}...`, "loading");
-                    try {
-                        const response = await fetch(target.url);
-                        if (!response.ok) throw new Error(`Could not find file (Status: ${response.status})`);
-                        
-                        const text = await response.text();
-                        loadingLine.remove(); 
-                        
-                        // We use textContent so markdown syntax (#, *, etc.) prints as clean text
-                        print(text);
-                    } catch (err) {
-                        loadingLine.textContent = `Error: ${err.message}`;
-                        loadingLine.className = "output-line error";
-                    }
-                } else {
-                    print(target.content || "(empty file)");
-                }
-            },
-            clear: () => {
-                outputElement.innerHTML = '';
-            }
-        };
-
-        inputElement.addEventListener('keydown', async (e) => {
-            if (e.key === 'Enter') {
-                const rawInput = inputElement.value.trim();
-                const parts = rawInput.split(/\s+/);
-                const cmd = parts[0].toLowerCase();
-                const args = parts.slice(1);
-
-                // Display the user command
-                const echoLine = document.createElement('div');
-                echoLine.className = 'output-line';
-                echoLine.innerHTML = `<span class="prompt">${promptLabel.textContent}</span> ${rawInput}`;
-                outputElement.appendChild(echoLine);
-
-                inputElement.value = ''; // Clear immediately for better feel
-
-                if (cmd === "") {
-                    // Just move to next line
-                } else if (commands[cmd]) {
-                    // We 'await' in case the command (like cat) is asynchronous
-                    await commands[cmd](args);
-                } else {
-                    print(`command not found: ${cmd}`, "error");
-                }
-
-                updatePrompt();
-                scrollToBottom();
-            }
-        });
-
-        // Initialize
-        updatePrompt();
     </script>
 </body>
 </html>
