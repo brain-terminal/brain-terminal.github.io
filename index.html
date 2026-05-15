@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Terminal + Responsive Cyber Go & LaTeX</title>
+    <title>Brain Terminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -115,8 +115,8 @@
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">CyberTerminal v6.0.0 [Responsive Protocol Active]</div>
-            <div class="output-line">Mobile optimized. Try 'ls' or 'cat math_demo.md'.</div>
+            <div class="output-line system">BrainTerminal v6.0.0</div>
+            <div class="output-line">Type 'help' for a list of available commands.</div>
             <div class="output-line">------------------------------------------------------------</div>
         </div>
         <div class="input-area">
@@ -127,7 +127,7 @@
 
     <script>
         const VIRTUAL_FS = {
-            "home": {
+            "root": {
                 type: "dir",
                 content: {
                     "math_demo.md": { 
