@@ -13,8 +13,6 @@
             --term-green: #00ff41;
             --term-blue: #5dade2;
             --term-white: #fdfefe;
-            --board-wood: #dbb06e;
-            --board-border: #8b5a2b;
         }
 
         body {
@@ -64,15 +62,14 @@
             flex-grow: 1;
         }
 
-        /* Elements & Highlighting */
         .folder { color: var(--term-blue); font-weight: bold; }
         .file { color: var(--term-white); }
         .error { color: #e74c3c; }
         .system { color: #f1c40f; }
         .loading { color: #888; font-style: italic; }
-        /* Go Board Styling */
+
         .go-container {
-            background: #dbb06e; /* Classic wood color */
+            background: #dbb06e;
             border: 2px solid #8b5a2b;
             border-radius: 6px;
             display: inline-block;
@@ -81,20 +78,17 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.6);
         }
 
-        /* Custom Scrollbar Styling */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: var(--term-bg); }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #444; }
     </style>
 </head>
 <body>
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">WebTerm v2.1.0 - Go Board Integration</div>
-            <div class="output-line">Type 'help' to see available commands.</div>
-            <div class="output-line">GitHub-style Go blocks (```go) are supported in .md files.</div>
+            <div class="output-line system">WebTerm v2.2.0 - Expanded Directory Framework</div>
+            <div class="output-line">Type 'ls' to see the new structure, 'cd' to navigate.</div>
             <div class="output-line">------------------------------------------------------------</div>
         </div>
         <div class="input-area">
@@ -104,24 +98,71 @@
     </div>
 
     <script>
+        /**
+         * EDIT THIS OBJECT TO ADD CONTENT
+         * Template for Folder: "name": { type: "dir", content: { ... } }
+         * Template for File:   "name.md": { type: "file", url: "path/to/file.md" }
+         * Template for String: "name.txt": { type: "file", content: "Hardcoded text here" }
+         */
         const VIRTUAL_FS = {
             "home": {
                 type: "dir",
                 content: {
-                    "README.md": { 
+                    "readme.md": { 
                         type: "file", 
-                        url: "README.md" 
+                        content: "# Navigation Guide\n\n- Use 'ls' to list contents.\n- Use 'cd <folder>' to go deeper.\n- Use 'cd ..' to go back.\n- Use 'cat <file>' to read markdown or render Go boards." 
                     },
-                    "Go": {
+                    "games": {
                         type: "dir",
                         content: {
-                            "classic.md": { type: "file", url: "games/classic.md" },
-                            "joseki.md": { type: "file", url: "games/joseki.md" },
-                            "Beginner": { 
+                            "active": {
                                 type: "dir",
                                 content: {
-                                    "the-rules.md": { type: "file", url: "games/the-rules.md" },
+                                    "current_match.md": { type: "file", content: "```go\nsize: 19\nblack: q16, d4\nwhite: d16, q4\n```" }
                                 }
+                            },
+                            "archives": {
+                                type: "dir",
+                                content: {
+                                    "2023_season": {
+                                        type: "dir",
+                                        content: {
+                                            "final_match.md": { type: "file", url: "archives/finals.md" },
+                                            "semis.md": { type: "file", url: "archives/semis.md" }
+                                        }
+                                    },
+                                    "classic_games.md": { type: "file", url: "games/classic.md" }
+                                }
+                            }
+                        }
+                    },
+                    "library": {
+                        type: "dir",
+                        content: {
+                            "joseki": {
+                                type: "dir",
+                                content: {
+                                    "star_point.md": { type: "file", url: "lib/joseki/star.md" },
+                                    "komoku.md": { type: "file", url: "lib/joseki/komoku.md" }
+                                }
+                            },
+                            "tsumego": {
+                                type: "dir",
+                                content: {
+                                    "daily_puzzle.md": { type: "file", url: "lib/tsumego/daily.md" }
+                                }
+                            }
+                        }
+                    },
+                    "projects": {
+                        type: "dir",
+                        content: {
+                            "site_engine": {
+                                type: "dir",
+                                content: {
+                                    "todo.txt": { type: "file", content: "1. Add dark mode\n2. Improve SVG rendering speed" }
+                                }
+                            }
                         }
                     }
                 }
@@ -159,24 +200,15 @@
             return current;
         }
 
-        /**
-         * Converts alpha-numeric coordinates (e.g. "c3") to 0-indexed XY
-         */
         function parseCoord(coord, size) {
             coord = coord.trim().toLowerCase();
             if (!coord) return null;
-
             const colChar = coord.charAt(0);
             const rowStr = coord.substring(1);
-
-            const x = colChar.charCodeAt(0) - 97; // a=0, b=1...
+            const x = colChar.charCodeAt(0) - 97;
             const rowNum = parseInt(rowStr);
-            
             if (isNaN(x) || isNaN(rowNum)) return null;
-
-            // Go rows are 1-indexed from the bottom. SVG Y is 0-indexed from the top.
             const y = size - rowNum; 
-
             if (x < 0 || x >= size || y < 0 || y >= size) return null;
             return { x, y };
         }
@@ -186,23 +218,17 @@
             const padding = 30;
             const totalSize = (size - 1) * cellSize + (padding * 2);
             const boardId = Math.random().toString(36).substr(2, 9);
-            
             const wrapper = document.createElement('div');
             wrapper.className = 'go-container';
 
             let svg = `<svg width="${totalSize}" height="${totalSize}" viewBox="0 0 ${totalSize} ${totalSize}" xmlns="http://www.w3.org/2000/svg">`;
-            
-            // Grid Lines
             svg += `<g stroke="#222" stroke-width="1.2" opacity="0.8">`;
             for (let i = 0; i < size; i++) {
-                // Horizontal
                 svg += `<line x1="${padding}" y1="${padding + i * cellSize}" x2="${totalSize - padding}" y2="${padding + i * cellSize}" />`;
-                // Vertical
                 svg += `<line x1="${padding + i * cellSize}" y1="${padding}" x2="${padding + i * cellSize}" y2="${totalSize - padding}" />`;
             }
             svg += `</g>`;
 
-            // Star Points (Hoshi)
             const starPoints = [];
             if (size === 19) starPoints.push({x:3,y:3},{x:9,y:3},{x:15,y:3},{x:3,y:9},{x:9,y:9},{x:15,y:9},{x:3,y:15},{x:9,y:15},{x:15,y:15});
             else if (size === 13) starPoints.push({x:3,y:3},{x:9,y:3},{x:3,y:9},{x:9,y:9},{x:6,y:6});
@@ -212,7 +238,6 @@
                 svg += `<circle cx="${padding + p.x * cellSize}" cy="${padding + p.y * cellSize}" r="3.5" fill="#222" />`;
             });
 
-            // Axis Labels
             svg += `<g fill="#443322" font-size="12" font-family="monospace" font-weight="bold">`;
             for (let i = 0; i < size; i++) {
                 svg += `<text x="${padding + i * cellSize}" y="${totalSize - 8}" text-anchor="middle">${String.fromCharCode(97 + i)}</text>`;
@@ -220,13 +245,11 @@
             }
             svg += `</g>`;
 
-            // Stone Gradients (Unique IDs)
             svg += `<defs>
                 <radialGradient id="gradB_${boardId}"><stop offset="30%" stop-color="#444"/><stop offset="100%" stop-color="#000"/></radialGradient>
                 <radialGradient id="gradW_${boardId}"><stop offset="70%" stop-color="#fff"/><stop offset="100%" stop-color="#ccc"/></radialGradient>
             </defs>`;
 
-            // Stones
             stones.forEach(s => {
                 const cx = padding + s.x * cellSize;
                 const cy = padding + s.y * cellSize;
@@ -255,7 +278,6 @@
                 let size = 19;
                 let rawLines = inner.split('\n');
                 
-                // FIRST PASS: Determine Size
                 rawLines.forEach(line => {
                     const sep = line.indexOf(':');
                     if (sep === -1) return;
@@ -264,7 +286,6 @@
                     if (key === 'size') size = parseInt(val) || 19;
                 });
 
-                // SECOND PASS: Parse Stones using the determined size
                 let stones = [];
                 rawLines.forEach(line => {
                     const sep = line.indexOf(':');
@@ -294,10 +315,10 @@
             help: () => {
                 print("Available commands:");
                 print("  ls      - List files in current directory");
-                print("  cd      - Change directory (e.g., 'cd games' or 'cd ..')");
-                print("  cat     - View file (fetches live .md and renders Go boards)");
-                print("  pwd     - Show current path");
-                print("  clear   - Clear the terminal");
+                print("  cd      - Change directory (e.g., 'cd games', 'cd active', 'cd ..')");
+                print("  cat     - View file content and render boards");
+                print("  pwd     - Show full current path");
+                print("  clear   - Clear terminal");
             },
             pwd: () => print("/" + currentPath.join('/')),
             ls: () => {
@@ -326,14 +347,11 @@
                 if (!args[0]) { print("cat: missing filename", "error"); return; }
                 const dir = getDirectory(currentPath);
                 const target = dir ? dir[args[0]] : null;
-
                 if (!target || target.type !== 'file') {
                     print(`cat: ${args[0]}: No such file`, "error");
                     return;
                 }
-
                 let content = target.content;
-                // Fetch external file if URL is provided
                 if (target.url) {
                     const loader = print(`Fetching ${target.url}...`, "loading");
                     try {
@@ -356,27 +374,21 @@
             if (e.key === 'Enter') {
                 const val = inputElement.value.trim();
                 const [cmd, ...args] = val.split(/\s+/);
-                
-                // Echo command
                 const line = document.createElement('div');
                 line.className = 'output-line';
                 line.innerHTML = `<span class="prompt">${promptLabel.textContent}</span> ${val}`;
                 outputElement.appendChild(line);
-                
                 inputElement.value = '';
-
                 if (cmd) {
                     const action = commands[cmd.toLowerCase()];
                     if (action) await action(args);
                     else print(`command not found: ${cmd}`, "error");
                 }
-
                 promptLabel.textContent = `visitor@web:/${currentPath.join('/')}$`;
                 scrollToBottom();
             }
         });
 
-        // Auto-scroll on resize
         window.addEventListener('resize', scrollToBottom);
     </script>
 </body>
