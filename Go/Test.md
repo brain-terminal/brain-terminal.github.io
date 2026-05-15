@@ -1,5 +1,5 @@
 ```go
-size 9
-black C3
-white D5
+size: 9
+black: c3
+white: d5
 ```
