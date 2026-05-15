@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retro Terminal Portfolio</title>
+    <title>Brain Terminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <style>
@@ -91,7 +91,7 @@
 
         // Mock File System
         const fileSystem = {
-            'home': {
+            'root': {
                 'about.txt': "I am a web developer passionate about building unique digital experiences. I love retro aesthetics and terminal interfaces.",
                 'projects': {
                     'terminal-web.md': "A website navigated entirely via CLI. Built with HTML/JS/Tailwind.",
@@ -103,7 +103,7 @@
             }
         };
 
-        let currentPath = ['home'];
+        let currentPath = ['root'];
 
         const commands = {
             help: () => `Available commands:
@@ -235,7 +235,7 @@
 
         // Initialize
         window.onload = () => {
-            print("System Booting...\n[OK] Video Driver Load Virtual File System Mounted\n\nWelcome to the Terminal Portfolio v1.0.4\nType 'help' to begin.\n");
+            print("Synapses firing...\n[OK]\nType 'help' to begin.\n");
             input.focus();
         };
 
