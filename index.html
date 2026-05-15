@@ -70,10 +70,10 @@
         .error { color: #e74c3c; }
         .system { color: #f1c40f; }
         .loading { color: #888; font-style: italic; }
-
+        /* Go Board Styling */
         .go-container {
-            background: var(--board-wood);
-            border: 2px solid var(--board-border);
+            background: #dbb06e; /* Classic wood color */
+            border: 2px solid #8b5a2b;
             border-radius: 6px;
             display: inline-block;
             padding: 20px;
@@ -104,11 +104,6 @@
     </div>
 
     <script>
-        /**
-         * CONFIGURATION: 
-         * Add your folders and files here.
-         * For files, use 'content' for raw text OR 'url' to fetch from your server.
-         */
         const VIRTUAL_FS = {
             "home": {
                 type: "dir",
@@ -161,8 +156,6 @@
 
         /**
          * Converts alpha-numeric coordinates (e.g. "c3") to 0-indexed XY
-         * Column: a=0, b=1, c=2...
-         * Row: 1 is bottom, size is top.
          */
         function parseCoord(coord, size) {
             coord = coord.trim().toLowerCase();
@@ -171,10 +164,15 @@
             const colChar = coord.charAt(0);
             const rowStr = coord.substring(1);
 
-            const x = colChar.charCodeAt(0) - 97;
-            const y = size - parseInt(rowStr); // Inverse for SVG top-down Y
+            const x = colChar.charCodeAt(0) - 97; // a=0, b=1...
+            const rowNum = parseInt(rowStr);
+            
+            if (isNaN(x) || isNaN(rowNum)) return null;
 
-            if (isNaN(x) || isNaN(y) || x < 0 || x >= size || y < 0 || y >= size) return null;
+            // Go rows are 1-indexed from the bottom. SVG Y is 0-indexed from the top.
+            const y = size - rowNum; 
+
+            if (x < 0 || x >= size || y < 0 || y >= size) return null;
             return { x, y };
         }
 
@@ -182,6 +180,7 @@
             const cellSize = 30;
             const padding = 30;
             const totalSize = (size - 1) * cellSize + (padding * 2);
+            const boardId = Math.random().toString(36).substr(2, 9);
             
             const wrapper = document.createElement('div');
             wrapper.className = 'go-container';
@@ -189,7 +188,7 @@
             let svg = `<svg width="${totalSize}" height="${totalSize}" viewBox="0 0 ${totalSize} ${totalSize}" xmlns="http://www.w3.org/2000/svg">`;
             
             // Grid Lines
-            svg += `<g stroke="#222" stroke-width="1.2" opacity="0.7">`;
+            svg += `<g stroke="#222" stroke-width="1.2" opacity="0.8">`;
             for (let i = 0; i < size; i++) {
                 // Horizontal
                 svg += `<line x1="${padding}" y1="${padding + i * cellSize}" x2="${totalSize - padding}" y2="${padding + i * cellSize}" />`;
@@ -198,38 +197,38 @@
             }
             svg += `</g>`;
 
-            // Star Points (Hoshi) - common for 9, 13, 19
+            // Star Points (Hoshi)
             const starPoints = [];
             if (size === 19) starPoints.push({x:3,y:3},{x:9,y:3},{x:15,y:3},{x:3,y:9},{x:9,y:9},{x:15,y:9},{x:3,y:15},{x:9,y:15},{x:15,y:15});
             else if (size === 13) starPoints.push({x:3,y:3},{x:9,y:3},{x:3,y:9},{x:9,y:9},{x:6,y:6});
             else if (size === 9) starPoints.push({x:2,y:2},{x:6,y:2},{x:2,y:6},{x:6,y:6},{x:4,y:4});
 
             starPoints.forEach(p => {
-                svg += `<circle cx="${padding + p.x * cellSize}" cy="${padding + p.y * cellSize}" r="3" fill="#222" />`;
+                svg += `<circle cx="${padding + p.x * cellSize}" cy="${padding + p.y * cellSize}" r="3.5" fill="#222" />`;
             });
 
             // Axis Labels
             svg += `<g fill="#443322" font-size="12" font-family="monospace" font-weight="bold">`;
             for (let i = 0; i < size; i++) {
-                // X (a, b, c...)
                 svg += `<text x="${padding + i * cellSize}" y="${totalSize - 8}" text-anchor="middle">${String.fromCharCode(97 + i)}</text>`;
-                // Y (1, 2, 3...)
                 svg += `<text x="12" y="${padding + i * cellSize + 4}" text-anchor="middle">${size - i}</text>`;
             }
             svg += `</g>`;
+
+            // Stone Gradients (Unique IDs)
+            svg += `<defs>
+                <radialGradient id="gradB_${boardId}"><stop offset="30%" stop-color="#444"/><stop offset="100%" stop-color="#000"/></radialGradient>
+                <radialGradient id="gradW_${boardId}"><stop offset="70%" stop-color="#fff"/><stop offset="100%" stop-color="#ccc"/></radialGradient>
+            </defs>`;
 
             // Stones
             stones.forEach(s => {
                 const cx = padding + s.x * cellSize;
                 const cy = padding + s.y * cellSize;
                 if (s.color === 'B') {
-                    // Black Stone with slight gradient/shading
-                    svg += `<defs><radialGradient id="gradB"><stop offset="30%" stop-color="#444"/><stop offset="100%" stop-color="#000"/></radialGradient></defs>`;
-                    svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="url(#gradB)" filter="drop-shadow(2px 2px 2px rgba(0,0,0,0.4))" />`;
+                    svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="url(#gradB_${boardId})" filter="drop-shadow(2px 2px 2px rgba(0,0,0,0.4))" />`;
                 } else {
-                    // White Stone with slight gradient/shading
-                    svg += `<defs><radialGradient id="gradW"><stop offset="70%" stop-color="#fff"/><stop offset="100%" stop-color="#ccc"/></radialGradient></defs>`;
-                    svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="url(#gradW)" stroke="#999" stroke-width="0.5" filter="drop-shadow(2px 2px 2px rgba(0,0,0,0.2))" />`;
+                    svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="url(#gradW_${boardId})" stroke="#999" stroke-width="0.5" filter="drop-shadow(2px 2px 2px rgba(0,0,0,0.2))" />`;
                 }
             });
 
@@ -239,51 +238,50 @@
         }
 
         function processAndDisplay(content) {
-            // Updated Regex to specifically target GitHub style ```go blocks
             const goBlockRegex = /```go([\s\S]*?)```/g;
-            
             let lastIndex = 0;
             let match;
 
             while ((match = goBlockRegex.exec(content)) !== null) {
-                // 1. Print any text appearing before the code block
                 const beforeText = content.substring(lastIndex, match.index).trim();
                 if (beforeText) print(beforeText);
 
-                // 2. Parse the Go block content
                 const inner = match[1].trim();
                 let size = 19;
+                let rawLines = inner.split('\n');
+                
+                // FIRST PASS: Determine Size
+                rawLines.forEach(line => {
+                    const sep = line.indexOf(':');
+                    if (sep === -1) return;
+                    const key = line.substring(0, sep).trim().toLowerCase();
+                    const val = line.substring(sep + 1).trim();
+                    if (key === 'size') size = parseInt(val) || 19;
+                });
+
+                // SECOND PASS: Parse Stones using the determined size
                 let stones = [];
+                rawLines.forEach(line => {
+                    const sep = line.indexOf(':');
+                    if (sep === -1) return;
+                    const key = line.substring(0, sep).trim().toLowerCase();
+                    const val = line.substring(sep + 1).trim();
 
-                const lines = inner.split('\n');
-                lines.forEach(line => {
-                    const separatorIndex = line.indexOf(':');
-                    if (separatorIndex === -1) return;
-
-                    const key = line.substring(0, separatorIndex).trim().toLowerCase();
-                    const val = line.substring(separatorIndex + 1).trim();
-
-                    if (key === 'size') {
-                        size = parseInt(val) || 19;
-                    } else if (key === 'black' || key === 'white') {
+                    if (key === 'black' || key === 'white') {
                         const color = (key === 'black') ? 'B' : 'W';
-                        const coords = val.split(',');
-                        coords.forEach(c => {
+                        val.split(',').forEach(c => {
                             const pos = parseCoord(c, size);
                             if (pos) stones.push({ ...pos, color });
                         });
                     }
                 });
 
-                // 3. Append the rendered SVG board
                 outputElement.appendChild(createBoardSVG(size, stones));
                 lastIndex = goBlockRegex.lastIndex;
             }
 
-            // 4. Print any remaining text after the last block
             const remainingText = content.substring(lastIndex).trim();
             if (remainingText) print(remainingText);
-            
             scrollToBottom();
         }
 
