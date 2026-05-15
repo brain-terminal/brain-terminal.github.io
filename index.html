@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BrainTerminal</title>
+    <title>Web Terminal + Cyber Go Renderer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
@@ -11,6 +11,7 @@
         :root {
             --term-bg: #0d0d0d;
             --term-green: #00ff41;
+            --term-green-dim: rgba(0, 255, 65, 0.3);
             --term-blue: #5dade2;
             --term-white: #fdfefe;
         }
@@ -69,13 +70,13 @@
         .loading { color: #888; font-style: italic; }
 
         .go-container {
-            background: #dbb06e;
-            border: 2px solid #8b5a2b;
-            border-radius: 6px;
+            background: #000;
+            border: 1px solid var(--term-green);
+            border-radius: 8px;
             display: inline-block;
             padding: 20px;
             margin: 15px 0;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.15);
         }
 
         ::-webkit-scrollbar { width: 8px; }
@@ -87,8 +88,8 @@
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">BrainTerminal v2.2.0 - Added "Go" rendering.</div>
-            <div class="output-line">Type 'help' to see a list of available commands.</div>
+            <div class="output-line system">CyberBoard Engine v4.0.0 [Phosphor Protocol Active]</div>
+            <div class="output-line">Type 'ls' or 'cat readme.md' to begin.</div>
             <div class="output-line">------------------------------------------------------------</div>
         </div>
         <div class="input-area">
@@ -98,69 +99,21 @@
     </div>
 
     <script>
-        /**
-         * EDIT THIS OBJECT TO ADD CONTENT
-         * Template for Folder: "name": { type: "dir", content: { ... } }
-         * Template for File:   "name.md": { type: "file", url: "path/to/file.md" }
-         * Template for String: "name.txt": { type: "file", content: "Hardcoded text here" }
-         */
         const VIRTUAL_FS = {
             "home": {
                 type: "dir",
                 content: {
-                    "README.md": { 
+                    "readme.md": { 
                         type: "file", 
-                        url: "README.md" 
+                        content: "# Cyber Board Demo\nLabels now support uppercase coordinates and marking empty intersections.\n\n```go\nsize: 19\nblack: Q16(1), D4(3)\nwhite: D16(2), Q4(4)\nmarks: K10(A), K11(B), L10(C)\n```" 
                     },
-                    "Go": {
+                    "games": {
                         type: "dir",
                         content: {
-                            "Beginner": {
+                            "active": {
                                 type: "dir",
                                 content: {
-                                    "equipment.md": { type: "file", url: "Go/Beginner/equipment.md" }
-                                }
-                            },
-                            "Intermediate": {
-                                type: "dir",
-                                content: {
-                                    "2023_season": {
-                                        type: "dir",
-                                        content: {
-                                            "final_match.md": { type: "file", url: "archives/finals.md" },
-                                            "semis.md": { type: "file", url: "archives/semis.md" }
-                                        }
-                                    },
-                                    "classic_games.md": { type: "file", url: "games/classic.md" }
-                                }
-                            }
-                        }
-                    },
-                    "Japanese": {
-                        type: "dir",
-                        content: {
-                            "JLPT-N5": {
-                                type: "dir",
-                                content: {
-                                    "star_point.md": { type: "file", url: "lib/joseki/star.md" },
-                                    "komoku.md": { type: "file", url: "lib/joseki/komoku.md" }
-                                }
-                            },
-                            "JLPT-N4": {
-                                type: "dir",
-                                content: {
-                                    "daily_puzzle.md": { type: "file", url: "lib/tsumego/daily.md" }
-                                }
-                            }
-                        }
-                    },
-                    "Mathematics": {
-                        type: "dir",
-                        content: {
-                            "Pre-calculus": {
-                                type: "dir",
-                                content: {
-                                    "todo.txt": { type: "file", content: "1. Add dark mode\n2. Improve SVG rendering speed" }
+                                    "example.md": { type: "file", content: "```go\nsize: 9\nblack: C3(1), G7\nwhite: G3(2), C7\nmarks: E5(X)\n```" }
                                 }
                             }
                         }
@@ -175,7 +128,6 @@
         const promptLabel = document.getElementById('prompt-label');
 
         function focusInput() { inputElement.focus(); }
-
         function scrollToBottom() {
             const term = document.getElementById('terminal');
             term.scrollTop = term.scrollHeight;
@@ -190,73 +142,113 @@
             return line;
         }
 
-        function getDirectory(pathArr) {
-            let current = VIRTUAL_FS;
-            for (const part of pathArr) {
-                if (current[part] && current[part].type === 'dir') {
-                    current = current[part].content;
-                } else { return null; }
-            }
-            return current;
-        }
+        function parseCoord(input, size) {
+            const regex = /^([a-z])(\d+)(?:\((.*)\))?$/i;
+            const match = input.trim().match(regex);
+            if (!match) return null;
 
-        function parseCoord(coord, size) {
-            coord = coord.trim().toLowerCase();
-            if (!coord) return null;
-            const colChar = coord.charAt(0);
-            const rowStr = coord.substring(1);
-            const x = colChar.charCodeAt(0) - 97;
+            let colChar = match[1].toUpperCase();
+            const rowStr = match[2];
+            const label = match[3] || null;
+
+            // In Go, 'I' is often skipped to avoid confusion with '1' or 'J'
+            // We'll calculate X based on standard alphabetical order first
+            let x = colChar.charCodeAt(0) - 65;
+            
             const rowNum = parseInt(rowStr);
-            if (isNaN(x) || isNaN(rowNum)) return null;
             const y = size - rowNum; 
+
             if (x < 0 || x >= size || y < 0 || y >= size) return null;
-            return { x, y };
+            return { x, y, label };
         }
 
-        function createBoardSVG(size, stones) {
-            const cellSize = 30;
+        function createBoardSVG(size, stones, viewportStr) {
+            const cellSize = 34;
             const padding = 30;
-            const totalSize = (size - 1) * cellSize + (padding * 2);
-            const boardId = Math.random().toString(36).substr(2, 9);
+            const termGreen = "#00ff41";
+
+            let vMinX = 0, vMaxX = size - 1, vMinY = 0, vMaxY = size - 1;
+            if (viewportStr) {
+                const parts = viewportStr.split('-');
+                if (parts.length === 2) {
+                    const start = parseCoord(parts[0], size);
+                    const end = parseCoord(parts[1], size);
+                    if (start && end) {
+                        vMinX = Math.min(start.x, end.x);
+                        vMaxX = Math.max(start.x, end.x);
+                        vMinY = Math.min(start.y, end.y);
+                        vMaxY = Math.max(start.y, end.y);
+                    }
+                }
+            }
+
+            const vWidth = vMaxX - vMinX;
+            const vHeight = vMaxY - vMinY;
+            const svgWidth = vWidth * cellSize + (padding * 2);
+            const svgHeight = vHeight * cellSize + (padding * 2);
+
             const wrapper = document.createElement('div');
             wrapper.className = 'go-container';
 
-            let svg = `<svg width="${totalSize}" height="${totalSize}" viewBox="0 0 ${totalSize} ${totalSize}" xmlns="http://www.w3.org/2000/svg">`;
-            svg += `<g stroke="#222" stroke-width="1.2" opacity="0.8">`;
+            let svg = `<svg width="${svgWidth}" height="${svgHeight}" viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg">`;
+            
+            // Rendering Phosphor Grid
+            svg += `<g stroke="${termGreen}" stroke-width="1" opacity="0.4">`;
             for (let i = 0; i < size; i++) {
-                svg += `<line x1="${padding}" y1="${padding + i * cellSize}" x2="${totalSize - padding}" y2="${padding + i * cellSize}" />`;
-                svg += `<line x1="${padding + i * cellSize}" y1="${padding}" x2="${padding + i * cellSize}" y2="${totalSize - padding}" />`;
+                if (i >= vMinY && i <= vMaxY) {
+                    const yPos = padding + (i - vMinY) * cellSize;
+                    svg += `<line x1="${padding}" y1="${yPos}" x2="${svgWidth - padding}" y2="${yPos}" />`;
+                }
+                if (i >= vMinX && i <= vMaxX) {
+                    const xPos = padding + (i - vMinX) * cellSize;
+                    svg += `<line x1="${xPos}" y1="${padding}" x2="${xPos}" y2="${svgHeight - padding}" />`;
+                }
             }
             svg += `</g>`;
 
+            // Star Points (Hoshi)
             const starPoints = [];
             if (size === 19) starPoints.push({x:3,y:3},{x:9,y:3},{x:15,y:3},{x:3,y:9},{x:9,y:9},{x:15,y:9},{x:3,y:15},{x:9,y:15},{x:15,y:15});
-            else if (size === 13) starPoints.push({x:3,y:3},{x:9,y:3},{x:3,y:9},{x:9,y:9},{x:6,y:6});
-            else if (size === 9) starPoints.push({x:2,y:2},{x:6,y:2},{x:2,y:6},{x:6,y:6},{x:4,y:4});
-
             starPoints.forEach(p => {
-                svg += `<circle cx="${padding + p.x * cellSize}" cy="${padding + p.y * cellSize}" r="3.5" fill="#222" />`;
+                if (p.x >= vMinX && p.x <= vMaxX && p.y >= vMinY && p.y <= vMaxY) {
+                    svg += `<circle cx="${padding + (p.x - vMinX) * cellSize}" cy="${padding + (p.y - vMinY) * cellSize}" r="3" fill="${termGreen}" />`;
+                }
             });
 
-            svg += `<g fill="#443322" font-size="12" font-family="monospace" font-weight="bold">`;
-            for (let i = 0; i < size; i++) {
-                svg += `<text x="${padding + i * cellSize}" y="${totalSize - 8}" text-anchor="middle">${String.fromCharCode(97 + i)}</text>`;
-                svg += `<text x="12" y="${padding + i * cellSize + 4}" text-anchor="middle">${size - i}</text>`;
+            svg += `<g fill="${termGreen}" font-size="12" font-family="'Fira Code', monospace" font-weight="bold" opacity="0.9">`;
+            for (let i = vMinX; i <= vMaxX; i++) {
+                // Using 65 for uppercase 'A'
+                svg += `<text x="${padding + (i - vMinX) * cellSize}" y="${svgHeight - 6}" text-anchor="middle">${String.fromCharCode(65 + i)}</text>`;
+            }
+            for (let i = vMinY; i <= vMaxY; i++) {
+                svg += `<text x="12" y="${padding + (i - vMinY) * cellSize + 4}" text-anchor="middle">${size - i}</text>`;
             }
             svg += `</g>`;
 
-            svg += `<defs>
-                <radialGradient id="gradB_${boardId}"><stop offset="30%" stop-color="#444"/><stop offset="100%" stop-color="#000"/></radialGradient>
-                <radialGradient id="gradW_${boardId}"><stop offset="70%" stop-color="#fff"/><stop offset="100%" stop-color="#ccc"/></radialGradient>
-            </defs>`;
-
             stones.forEach(s => {
-                const cx = padding + s.x * cellSize;
-                const cy = padding + s.y * cellSize;
-                if (s.color === 'B') {
-                    svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="url(#gradB_${boardId})" filter="drop-shadow(2px 2px 2px rgba(0,0,0,0.4))" />`;
-                } else {
-                    svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="url(#gradW_${boardId})" stroke="#999" stroke-width="0.5" filter="drop-shadow(2px 2px 2px rgba(0,0,0,0.2))" />`;
+                if (s.x >= vMinX && s.x <= vMaxX && s.y >= vMinY && s.y <= vMaxY) {
+                    const cx = padding + (s.x - vMinX) * cellSize;
+                    const cy = padding + (s.y - vMinY) * cellSize;
+                    const r = cellSize / 2 - 3;
+                    
+                    if (s.color === 'B') {
+                        svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#000" stroke="${termGreen}" stroke-width="1.5" />`;
+                        if (s.label) {
+                            svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${termGreen}" font-size="12" font-family="'Fira Code'">${s.label}</text>`;
+                        }
+                    } else if (s.color === 'W') {
+                        svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${termGreen}" />`;
+                        if (s.label) {
+                            svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="#000" font-size="12" font-family="'Fira Code'" font-weight="bold">${s.label}</text>`;
+                        }
+                    } else {
+                        // Color 'N' (Neutral/Mark)
+                        if (s.label) {
+                            // Draw a small background glow for the label to ensure legibility over lines
+                            svg += `<rect x="${cx - 8}" y="${cy - 8}" width="16" height="16" fill="#000" />`;
+                            svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${termGreen}" font-size="14" font-family="'Fira Code'" font-weight="bold">${s.label}</text>`;
+                        }
+                    }
                 }
             });
 
@@ -276,6 +268,8 @@
 
                 const inner = match[1].trim();
                 let size = 19;
+                let viewport = null;
+                let stones = [];
                 let rawLines = inner.split('\n');
                 
                 rawLines.forEach(line => {
@@ -284,25 +278,25 @@
                     const key = line.substring(0, sep).trim().toLowerCase();
                     const val = line.substring(sep + 1).trim();
                     if (key === 'size') size = parseInt(val) || 19;
+                    if (key === 'viewport') viewport = val;
                 });
 
-                let stones = [];
                 rawLines.forEach(line => {
                     const sep = line.indexOf(':');
                     if (sep === -1) return;
                     const key = line.substring(0, sep).trim().toLowerCase();
                     const val = line.substring(sep + 1).trim();
-
-                    if (key === 'black' || key === 'white') {
-                        const color = (key === 'black') ? 'B' : 'W';
+                    
+                    const colorMap = { 'black': 'B', 'white': 'W', 'marks': 'N' };
+                    if (colorMap[key]) {
                         val.split(',').forEach(c => {
                             const pos = parseCoord(c, size);
-                            if (pos) stones.push({ ...pos, color });
+                            if (pos) stones.push({ ...pos, color: colorMap[key] });
                         });
                     }
                 });
 
-                outputElement.appendChild(createBoardSVG(size, stones));
+                outputElement.appendChild(createBoardSVG(size, stones, viewport));
                 lastIndex = goBlockRegex.lastIndex;
             }
 
@@ -313,12 +307,8 @@
 
         const commands = {
             help: () => {
-                print("Available commands:");
-                print("  ls      - List files in current directory");
-                print("  cd      - Change directory (e.g., 'cd games', 'cd active', 'cd ..')");
-                print("  cat     - View file content and render boards");
-                print("  pwd     - Show full current path");
-                print("  clear   - Clear terminal");
+                print("Commands: ls, cd, cat, pwd, clear, help");
+                print("Board Syntax: black: A1(1), white: B2(2), marks: C3(X)");
             },
             pwd: () => print("/" + currentPath.join('/')),
             ls: () => {
@@ -330,27 +320,20 @@
                 });
             },
             cd: (args) => {
-                if (!args[0] || args[0] === "~") {
-                    currentPath = ["home"];
-                } else if (args[0] === "..") {
-                    if (currentPath.length > 1) currentPath.pop();
-                } else {
+                if (!args[0] || args[0] === "~") { currentPath = ["home"]; }
+                else if (args[0] === "..") { if (currentPath.length > 1) currentPath.pop(); }
+                else {
                     const dir = getDirectory(currentPath);
-                    if (dir && dir[args[0]] && dir[args[0]].type === 'dir') {
-                        currentPath.push(args[0]);
-                    } else {
-                        print(`cd: no such directory: ${args[0]}`, "error");
-                    }
+                    if (dir && dir[args[0]] && dir[args[0]].type === 'dir') { currentPath.push(args[0]); }
+                    else { print(`cd: no such directory: ${args[0]}`, "error"); }
                 }
             },
             cat: async (args) => {
                 if (!args[0]) { print("cat: missing filename", "error"); return; }
                 const dir = getDirectory(currentPath);
                 const target = dir ? dir[args[0]] : null;
-                if (!target || target.type !== 'file') {
-                    print(`cat: ${args[0]}: No such file`, "error");
-                    return;
-                }
+                if (!target || target.type !== 'file') { print(`cat: ${args[0]}: No such file`, "error"); return; }
+                
                 let content = target.content;
                 if (target.url) {
                     const loader = print(`Fetching ${target.url}...`, "loading");
@@ -360,7 +343,7 @@
                         content = await res.text();
                         loader.remove();
                     } catch (e) { 
-                        loader.textContent = `cat: error loading ${target.url} (${e.message})`;
+                        loader.textContent = `cat: error loading ${target.url}`;
                         loader.className = "output-line error";
                         return; 
                     }
@@ -369,6 +352,16 @@
             },
             clear: () => outputElement.innerHTML = ''
         };
+
+        function getDirectory(pathArr) {
+            let current = VIRTUAL_FS;
+            for (const part of pathArr) {
+                if (current[part] && current[part].type === 'dir') {
+                    current = current[part].content;
+                } else { return null; }
+            }
+            return current;
+        }
 
         inputElement.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter') {
