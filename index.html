@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -45,7 +45,7 @@
         .output-line {
             margin-bottom: 8px;
             white-space: pre-wrap;
-            word-break: break-all; /* Force wrap at edge even without spaces */
+            word-break: break-all; /* Critical: Forces wrapping even on long strings without spaces */
             line-height: 1.5;
             width: 100%;
         }
@@ -59,10 +59,11 @@
 
         .input-area {
             display: flex;
-            flex-wrap: wrap; /* Allows input to wrap below prompt if needed */
+            flex-wrap: wrap;
             align-items: flex-start;
             margin-top: 10px;
             padding-bottom: 30px;
+            width: 100%;
         }
 
         .prompt {
@@ -80,8 +81,8 @@
             font-size: inherit;
             outline: none;
             flex-grow: 1;
-            min-width: 50px;
-            word-break: break-all;
+            min-width: 100px;
+            word-break: break-all; /* Ensures typed text wraps at screen edge */
         }
 
         .folder { color: var(--term-blue); font-weight: bold; }
@@ -89,23 +90,6 @@
         .error { color: #ff5555; }
         .system { color: #f1c40f; }
         .loading { color: #888; font-style: italic; }
-
-        .go-container {
-            background: #000;
-            border: 1px solid var(--term-green);
-            border-radius: 8px;
-            display: inline-block;
-            padding: 10px;
-            margin: 15px 0;
-            max-width: 100%;
-            overflow-x: auto;
-        }
-
-        .go-container svg {
-            display: block;
-            height: auto;
-            max-width: 100%;
-        }
 
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: var(--term-bg); }
@@ -116,7 +100,7 @@
 
     <div id="terminal" onclick="focusInput()">
         <div id="output">
-            <div class="output-line system">BrainTerminal v6.1.2</div>
+            <div class="output-line system">BrainTerminal v6.1.3</div>
             <div class="output-line">Type 'help' for a list of available commands.</div>
         </div>
         <div class="input-area">
@@ -130,7 +114,10 @@
             "root": {
                 type: "dir",
                 content: {
-                    "README.md": { type: "file", url: "README.md" },
+                    "README.md": { 
+                        type: "file", 
+                        url: "README.md" 
+                    },
                     "topics": {
                         type: "dir",
                         content: {
@@ -152,7 +139,7 @@
                                     "jlpt-n5": { 
                                         type: "dir", 
                                         content: {
-                                            "hiragana-katakana.md": { type: "file", url: "japanese/jlpt-n5/hiragana-katakana.md" } 
+                                            "kana.md": { type: "file", url: "kana.md" } 
                                         }
                                     }
                                 }
@@ -180,16 +167,15 @@
             line.className = `output-line ${className}`;
             line.textContent = text;
             outputElement.appendChild(line);
+            scrollToBottom();
             return line; 
         }
 
         function updatePrompt() {
-            // Visual display: Convert "root" to "~"
             let displayPath = "";
             if (currentPath.length === 1 && currentPath[0] === "root") {
                 displayPath = "~";
             } else {
-                // Remove the internal "root" from the path display
                 const visualParts = currentPath.slice(1);
                 displayPath = "~/" + visualParts.join('/');
             }
@@ -235,7 +221,7 @@
                     let tempPath = pathString.startsWith('/') ? ["root"] : [...currentPath];
                     if (pathString.startsWith('~')) {
                         tempPath = ["root"];
-                        parts.shift(); // remove ~ part
+                        parts.shift();
                     }
 
                     for (const part of parts) {
@@ -255,17 +241,41 @@
                 }
                 updatePrompt();
             },
-            cat: (args) => {
+            cat: async (args) => {
                 if (!args[0]) { print("cat: missing filename", "error"); return; }
                 const dir = getDirectory(currentPath);
                 const target = dir ? dir[args[0]] : null;
-                if (!target || target.type !== 'file') { print(`cat: ${args[0]}: No such file`, "error"); return; }
-                print(target.content || "[Empty File]");
+                
+                if (!target || target.type !== 'file') { 
+                    print(`cat: ${args[0]}: No such file`, "error"); 
+                    return; 
+                }
+
+                // If content is already present in FS
+                if (target.content) {
+                    print(target.content);
+                } 
+                // If it's a URL, fetch it
+                else if (target.url) {
+                    const loadingLine = print(`Fetching ${target.url}...`, "loading");
+                    try {
+                        const response = await fetch(target.url);
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        const text = await response.text();
+                        loadingLine.remove();
+                        print(text);
+                    } catch (err) {
+                        loadingLine.textContent = `cat: error fetching ${target.url}: ${err.message}`;
+                        loadingLine.className = "output-line error";
+                    }
+                } else {
+                    print("[Empty File]");
+                }
             },
             clear: () => outputElement.innerHTML = ''
         };
 
-        inputElement.addEventListener('keydown', (e) => {
+        inputElement.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter') {
                 const val = inputElement.value;
                 const [cmd, ...args] = val.trim().split(/\s+/);
@@ -278,13 +288,21 @@
                 inputElement.value = '';
                 if (cmd) {
                     const action = commands[cmd.toLowerCase()];
-                    if (action) action(args);
+                    if (action) {
+                        // Check if action is async
+                        if (action.constructor.name === "AsyncFunction") {
+                            await action(args);
+                        } else {
+                            action(args);
+                        }
+                    }
                     else print(`command not found: ${cmd}`, "error");
                 }
                 scrollToBottom();
             }
         });
 
+        // Initialize display
         updatePrompt();
     </script>
 </body>
