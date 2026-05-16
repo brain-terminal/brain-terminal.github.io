@@ -120,7 +120,7 @@
             <div class="output-line">Type 'help' for a list of available commands.</div>
         </div>
         <div class="input-area">
-            <span class="prompt" id="prompt-label">psyche@brain:~$</span>
+            <span class="prompt" id="prompt-label">visitor@brain:~$</span>
             <input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false" enterkeyhint="go">
         </div>
     </div>
@@ -193,7 +193,7 @@
                 const visualParts = currentPath.slice(1);
                 displayPath = "~/" + visualParts.join('/');
             }
-            promptLabel.textContent = `psyche@brain:${displayPath}$`;
+            promptLabel.textContent = `visitor@brain:${displayPath}$`;
         }
 
         function getDirectory(pathArr) {
