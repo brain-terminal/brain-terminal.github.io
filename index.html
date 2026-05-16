@@ -9,8 +9,351 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <style>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brain Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
 
+        :root {
+            --term-bg: #0d0d0d;
+            --term-green: #00ff41;
+            --term-green-dim: rgba(0, 255, 65, 0.2);
+            --term-blue: #5dade2;
+            --term-white: #fdfefe;
+        }
+
+        body {
+            background-color: var(--term-bg);
+            color: var(--term-green);
+            font-family: 'Fira Code', monospace;
+            margin: 0;
+            overflow: hidden;
+            font-size: clamp(0.85rem, 2vw, 1rem);
+        }
+
+        #terminal {
+            height: 100vh;
+            padding: 15px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            scrollbar-gutter: stable;
+        }
+
+        .output-line {
+            margin-bottom: 8px;
+            white-space: pre-wrap;
+            word-break: break-all; /* CRITICAL: Forces wrap on long strings */
+            line-height: 1.5;
+            width: 100%;
+        }
+
+        .ls-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 20px;
+            margin-bottom: 8px;
+        }
+
+        .input-area {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            margin-top: 10px;
+            padding-bottom: 30px;
+            width: 100%;
+        }
+
+        .prompt {
+            color: var(--term-green);
+            margin-right: 8px;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+
+        #cmd-input {
+            background: transparent;
+            border: none;
+            color: var(--term-green);
+            font-family: 'Fira Code', monospace;
+            font-size: inherit;
+            outline: none;
+            flex-grow: 1;
+            min-width: 100px;
+            word-break: break-all; /* Ensures typed text wraps at edge */
+        }
+
+        .folder { color: var(--term-blue); font-weight: bold; }
+        .file { color: var(--term-white); }
+        .error { color: #ff5555; }
+        .system { color: #f1c40f; }
+        .loading { color: #888; font-style: italic; }
+
+        .go-container {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            display: inline-block;
+            padding: 15px;
+            margin: 10px 0;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--term-bg); }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="terminal" onclick="focusInput()">
+        <div id="output">
+            <div class="output-line system">BrainTerminal v6.1.4</div>
+            <div class="output-line">Type 'help' for a list of available commands.</div>
+        </div>
+        <div class="input-area">
+            <span class="prompt" id="prompt-label">visitor@brain:~$</span>
+            <input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false" enterkeyhint="go">
+        </div>
+    </div>
+
+    <script>
+        const VIRTUAL_FS = {
+            "root": {
+                type: "dir",
+                content: {
+                    "README.md": { 
+                        type: "file", 
+                        url: "README.md" 
+                    },
+                    "topics": {
+                        type: "dir",
+                        content: {
+                            "go": {
+                                type: "dir",
+                                content: {
+                                    "beginner": { 
+                                        type: "dir", 
+                                        content: {
+                                            "equipment.md": { 
+                                                type: "file", 
+                                                url: "go/beginner/equipment.md" 
+                                            },
+                                            "object-of-the-game.md": { type: "file", url: "go/beginner/object-of-the-game.md" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        let currentPath = ["root"];
+        const outputElement = document.getElementById('output');
+        const inputElement = document.getElementById('cmd-input');
+        const promptLabel = document.getElementById('prompt-label');
+
+        function focusInput() { inputElement.focus(); }
+
+        function scrollToBottom() {
+            const term = document.getElementById('terminal');
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function print(text, className = "") {
+            const line = document.createElement('div');
+            line.className = `output-line ${className}`;
+            line.textContent = text;
+            outputElement.appendChild(line);
+            scrollToBottom();
+            return line; 
+        }
+
+        function parseCoord(coord, size) {
+            coord = coord.trim().toLowerCase();
+            if (!coord) return null;
+            const colChar = coord.charAt(0);
+            const rowStr = coord.substring(1);
+            const x = colChar.charCodeAt(0) - 97;
+            const y = size - parseInt(rowStr);
+            return { x, y };
+        }
+
+        function createBoardSVG(size, stones) {
+            const cellSize = 30;
+            const padding = 25;
+            const totalSize = (size - 1) * cellSize + (padding * 2);
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'go-container';
+
+            let svg = `<svg width="${totalSize}" height="${totalSize}" viewBox="0 0 ${totalSize} ${totalSize}" xmlns="http://www.w3.org/2000/svg">`;
+            svg += `<rect width="100%" height="100%" fill="#deb887" rx="4"/>`;
+            svg += `<g stroke="#444" stroke-width="1">`;
+            for (let i = 0; i < size; i++) {
+                svg += `<line x1="${padding}" y1="${padding + i * cellSize}" x2="${totalSize - padding}" y2="${padding + i * cellSize}" />`;
+                svg += `<line x1="${padding + i * cellSize}" y1="${padding}" x2="${padding + i * cellSize}" y2="${totalSize - padding}" />`;
+            }
+            svg += `</g>`;
+
+            stones.forEach(s => {
+                const cx = padding + s.x * cellSize;
+                const cy = padding + s.y * cellSize;
+                const color = s.color === 'B' ? '#111' : '#fff';
+                const stroke = s.color === 'B' ? 'none' : '#ccc';
+                svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 2}" fill="${color}" stroke="${stroke}" />`;
+            });
+
+            svg += `</svg>`;
+            wrapper.innerHTML = svg;
+            return wrapper;
+        }
+
+        function processAndDisplay(content) {
+            const goBlockRegex = /```go([\s\S]*?)```/g;
+            let lastIndex = 0;
+            let match;
+
+            while ((match = goBlockRegex.exec(content)) !== null) {
+                const beforeText = content.substring(lastIndex, match.index).trim();
+                if (beforeText) print(beforeText);
+
+                const inner = match[1].trim();
+                let size = 19;
+                let stones = [];
+                inner.split('\n').forEach(line => {
+                    const [key, val] = line.split(':').map(s => s.trim());
+                    if (key === 'size') size = parseInt(val);
+                    else if (key === 'black' || key === 'white') {
+                        const color = key === 'black' ? 'B' : 'W';
+                        val.split(',').forEach(c => {
+                            const pos = parseCoord(c, size);
+                            if (pos) stones.push({ ...pos, color });
+                        });
+                    }
+                });
+
+                outputElement.appendChild(createBoardSVG(size, stones));
+                lastIndex = goBlockRegex.lastIndex;
+            }
+            const remainingText = content.substring(lastIndex).trim();
+            if (remainingText) print(remainingText);
+            scrollToBottom();
+        }
+
+        function updatePrompt() {
+            let displayPath = currentPath.length === 1 ? "~" : "~/" + currentPath.slice(1).join('/');
+            promptLabel.textContent = `visitor@brain:${displayPath}$`;
+        }
+
+        function getDirectory(pathArr) {
+            let current = VIRTUAL_FS;
+            for (const part of pathArr) {
+                if (current[part] && current[part].type === 'dir') current = current[part].content;
+                else return null;
+            }
+            return current;
+        }
+
+        const commands = {
+            help: () => print("Commands: ls, cd, cat, pwd, clear, help"),
+            pwd: () => print(currentPath.length === 1 ? "~" : "~/" + currentPath.slice(1).join('/')),
+            ls: () => {
+                const dir = getDirectory(currentPath);
+                if (!dir) return;
+                const grid = document.createElement('div');
+                grid.className = 'ls-grid';
+                Object.keys(dir).forEach(item => {
+                    const span = document.createElement('span');
+                    span.className = dir[item].type === 'dir' ? 'folder' : 'file';
+                    span.textContent = item + (dir[item].type === 'dir' ? '/' : '');
+                    grid.appendChild(span);
+                });
+                outputElement.appendChild(grid);
+            },
+            cd: (args) => {
+                if (!args[0] || args[0] === "~") {
+                    currentPath = ["root"];
+                } else {
+                    const pathString = args[0];
+                    const parts = pathString.split('/').filter(p => p !== "" && p !== ".");
+                    let tempPath = [...currentPath];
+                    if (pathString.startsWith('~')) { tempPath = ["root"]; parts.shift(); }
+
+                    for (const part of parts) {
+                        if (part === "..") { if (tempPath.length > 1) tempPath.pop(); }
+                        else {
+                            const currentDir = getDirectory(tempPath);
+                            if (currentDir && currentDir[part] && currentDir[part].type === 'dir') tempPath.push(part);
+                            else { print(`cd: no such directory: ${pathString}`, "error"); return; }
+                        }
+                    }
+                    currentPath = tempPath;
+                }
+                updatePrompt();
+            },
+            cat: async (args) => {
+                if (!args[0]) { print("cat: missing filename", "error"); return; }
+                const dir = getDirectory(currentPath);
+                const target = dir ? dir[args[0]] : null;
+                if (!target || target.type !== 'file') { print(`cat: ${args[0]}: No such file`, "error"); return; }
+
+                if (target.content) {
+                    processAndDisplay(target.content);
+                } else if (target.url) {
+                    const loader = print(`Fetching ${target.url}...`, "loading");
+                    try {
+                        const res = await fetch(target.url);
+                        const text = await res.text();
+                        loader.remove();
+                        processAndDisplay(text);
+                    } catch (e) {
+                        loader.textContent = `cat: error fetching ${target.url}`;
+                        loader.className = "output-line error";
+                    }
+                } else {
+                    print("[Empty File]");
+                }
+            },
+            clear: () => outputElement.innerHTML = ''
+        };
+
+        inputElement.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                const val = inputElement.value;
+                const [cmd, ...args] = val.trim().split(/\s+/);
+                
+                const line = document.createElement('div');
+                line.className = 'output-line';
+                line.innerHTML = `<span class="prompt">${promptLabel.textContent}</span> ${val}`;
+                outputElement.appendChild(line);
+                
+                inputElement.value = '';
+                if (cmd) {
+                    const action = commands[cmd.toLowerCase()];
+                    if (action) await action(args);
+                    else print(`command not found: ${cmd}`, "error");
+                }
+                scrollToBottom();
+            }
+        });
+
+        updatePrompt();
+    </script>
+</body>
+</html>
         :root {
             --term-bg: #0d0d0d;
             --term-green: #00ff41;
