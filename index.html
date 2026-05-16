@@ -116,10 +116,7 @@
             "root": {
                 type: "dir",
                 content: {
-                    "README.md": { 
-                        type: "file", 
-                        content: "# Welcome\nExplore by typing 'ls topics'." 
-                    },
+                    "README.md": { type: "file", file: "README.md" },
                     "topics": {
                         type: "dir",
                         content: {
@@ -130,12 +127,13 @@
                                         type: "file", 
                                         content: `The goal is territory.
 
-\`\`\`go
+```go
 size: 9
-black: c3:1, c7:3, g7:5, g3:7
-white: e5:2, d4:4, f6:6
+viewport: c3-f6                                            
+black: c3(1), c7(3), g7(5), g3(7)
+white: e5(2), d4(4), f6(6)
 marks: d6(A), f4(B), e3(X)
-\`\`\``
+```
                                     },
                                     "test-suite.md": {
                                         type: "file",
