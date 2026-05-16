@@ -7,8 +7,459 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brain Terminal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+
+        :root {
+            --term-bg: #0d0d0d;
+            --term-green: #00ff41;
+            --term-green-dim: rgba(0, 255, 65, 0.2);
+            --term-blue: #5dade2;
+            --term-white: #fdfefe;
+        }
+
+        body {
+            background-color: var(--term-bg) !important;
+            color: var(--term-green);
+            font-family: 'Fira Code', monospace;
+            margin: 0;
+            overflow: hidden;
+            font-size: clamp(0.85rem, 2vw, 1rem);
+        }
+
+        #terminal {
+            height: 100vh;
+            padding: 15px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            scrollbar-gutter: stable;
+        }
+
+        .output-line {
+            margin-bottom: 8px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            line-height: 1.5;
+            width: 100%;
+        }
+
+        .input-area {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            margin-top: 10px;
+            padding-bottom: 30px;
+            width: 100%;
+        }
+
+        #cmd-input {
+            background: transparent;
+            border: none;
+            color: var(--term-green);
+            font-family: 'Fira Code', monospace;
+            font-size: inherit;
+            outline: none;
+            flex-grow: 1;
+            min-width: 100px;
+            word-break: break-all;
+        }
+
+        .prompt { color: var(--term-green); margin-right: 8px; white-space: nowrap; font-weight: 500; }
+        .folder { color: var(--term-blue); font-weight: bold; }
+        .file { color: var(--term-white); }
+        .error { color: #ff5555; }
+        .system { color: #f1c40f; }
+
+        .go-container {
+            background: #000;
+            border: 1px solid var(--term-green);
+            border-radius: 8px;
+            display: inline-block;
+            padding: 15px;
+            margin: 10px 0;
+            max-width: 100%;
+            overflow-x: auto;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.15);
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="terminal" onclick="focusInput()">
+        <div id="output">
+            <div class="output-line system">BrainTerminal v6.4.0</div>
+            <div class="output-line">Type 'help' for a list of available commands.</div>
+        </div>
+        <div class="input-area">
+            <span class="prompt" id="prompt-label">visitor@brain:~$</span>
+            <input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false">
+        </div>
+    </div>
+
+    <script>
+        const VIRTUAL_FS = {
+            "root": {
+                type: "dir",
+                content: {
+                    "README.md": { 
+                        type: "file", 
+                        content: "# Welcome\nExplore by typing 'ls topics'." 
+                    },
+                    "topics": {
+                        type: "dir",
+                        content: {
+                            "go": {
+                                type: "dir",
+                                content: {
+                                    "rules.md": { 
+                                        type: "file", 
+                                        content: `The goal is territory.
+
+\`\`\`go
+size: 9
+black: c3:1, c7:3, g7:5, g3:7
+white: e5:2, d4:4, f6:6
+marks: d6(A), f4(B), e3(X)
+\`\`\``
+                                    },
+                                    "test-suite.md": {
+                                        type: "file",
+                                        content: `### Standard 19x19 Opening with Key Marks
+
+\`\`\`go
+size: 19
+black: q16, d4, r10, q10
+white: d16, q4, c14, r17
+marks: f3(A), c6(B), k10(H)
+\`\`\``
+                                    }
+                                }
+                            },
+                            "math.md": {
+                                type: "file",
+                                content: "Quadratic formula: $x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$\n\nEuler's Identity: $$e^{i\\pi} + 1 = 0$$"
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        let currentPath = ["root"];
+        const outputElement = document.getElementById('output');
+        const inputElement = document.getElementById('cmd-input');
+        const promptLabel = document.getElementById('prompt-label');
+
+        const KATEX_OPTIONS = {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\(', right: '\\)', display: false},
+                {left: '\\[', right: '\\]', display: true}
+            ],
+            throwOnError: false
+        };
+
+        function focusInput() { inputElement.focus(); }
+        function scrollToBottom() { document.getElementById('terminal').scrollTop = document.getElementById('terminal').scrollHeight; }
+
+        function print(text, className = "") {
+            const line = document.createElement('div');
+            line.className = `output-line ${className}`;
+            line.textContent = text;
+            outputElement.appendChild(line);
+            renderMathInElement(line, KATEX_OPTIONS);
+            scrollToBottom();
+            return line; 
+        }
+
+        function parseCoord(input, size) {
+            // Support both "c3:1" and "c3(A)" formats seamlessly
+            const cleanInput = input.trim();
+            const match = cleanInput.match(/^([a-z])(\d+)(?:[:(]([^)]+)\)?)?$/i);
+            if (!match) return null;
+
+            let colChar = match[1].toLowerCase();
+            let col = colChar.charCodeAt(0) - 97;
+            if (colChar > 'i') col -= 1; // Standard Go boards skip 'i' to avoid confusion
+
+            const rowStr = match[2];
+            const row = size - parseInt(rowStr);
+            const label = match[3] || null;
+
+            if (col < 0 || col >= size || row < 0 || row >= size) return null;
+
+            return { x: col, y: row, num: label };
+        }
+
+        function createBoardSVG(size, stones) {
+            const cellSize = 32;
+            const padding = 30;
+            const totalSize = (size - 1) * cellSize + (padding * 2);
+            const termGreen = "#00ff41";
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'go-container';
+            
+            let svg = `<svg width="${totalSize}" height="${totalSize}" viewBox="0 0 ${totalSize} ${totalSize}" xmlns="http://www.w3.org/2000/svg">`;
+
+            // Terminal Style Matrix Board Background
+            svg += `<rect width="100%" height="100%" fill="#000" stroke="${termGreen}" stroke-width="1.5" rx="6" />`;
+            
+            // Grid Lines (Glowing green with subtle opacity)
+            svg += `<g stroke="${termGreen}" stroke-width="1" opacity="0.25">`;
+            for (let i = 0; i < size; i++) {
+                // Horizontal
+                svg += `<line x1="${padding}" y1="${padding + i * cellSize}" x2="${totalSize - padding}" y2="${padding + i * cellSize}" />`;
+                // Vertical
+                svg += `<line x1="${padding + i * cellSize}" y1="${padding}" x2="${padding + i * cellSize}" y2="${totalSize - padding}" />`;
+            }
+            svg += `</g>`;
+
+            // Hoshi (Star Points) in Glowing Green
+            const hoshi = [];
+            if (size === 19) {
+                [3, 9, 15].forEach(r => [3, 9, 15].forEach(c => hoshi.push({x: c, y: r})));
+            } else if (size === 13) {
+                [3, 6, 9].forEach(r => [3, 6, 9].forEach(c => hoshi.push({x: c, y: r})));
+            } else if (size === 9) {
+                [2, 4, 6].forEach(r => [2, 4, 6].forEach(c => hoshi.push({x: c, y: r})));
+                hoshi.push({x: 4, y: 4});
+            }
+
+            hoshi.forEach(h => {
+                svg += `<circle cx="${padding + h.x * cellSize}" cy="${padding + h.y * cellSize}" r="3.5" fill="${termGreen}" opacity="0.8" />`;
+            });
+
+            // Axis Labels in Monospace Green
+            svg += `<g fill="${termGreen}" font-size="11" font-weight="bold" font-family="'Fira Code', monospace" opacity="0.85">`;
+            for (let i = 0; i < size; i++) {
+                // Letters (X axis) - skip 'I'
+                let labelCode = 97 + i;
+                if (i >= 8) labelCode += 1;
+                const letter = String.fromCharCode(labelCode).toUpperCase();
+                
+                svg += `<text x="${padding + i * cellSize}" y="${padding - 10}" text-anchor="middle">${letter}</text>`;
+                svg += `<text x="${padding + i * cellSize}" y="${totalSize - padding + 20}" text-anchor="middle">${letter}</text>`;
+                
+                // Numbers (Y axis)
+                const num = size - i;
+                svg += `<text x="${padding - 15}" y="${padding + i * cellSize + 4}" text-anchor="middle">${num}</text>`;
+                svg += `<text x="${totalSize - padding + 15}" y="${padding + i * cellSize + 4}" text-anchor="middle">${num}</text>`;
+            }
+            svg += `</g>`;
+
+            // Stones & Marks rendering
+            stones.forEach(s => {
+                const cx = padding + s.x * cellSize;
+                const cy = padding + s.y * cellSize;
+                
+                if (s.color === 'B') {
+                    // Black Stone: Hollow black core with neon green edge mapping
+                    svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 1}" fill="#000" stroke="${termGreen}" stroke-width="1.5" />`;
+                    if (s.num) {
+                        svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${termGreen}" font-size="11" font-weight="bold" font-family="'Fira Code', monospace">${s.num}</text>`;
+                    }
+                } else if (s.color === 'W') {
+                    // White Stone: Glowing solid neon green stone
+                    svg += `<circle cx="${cx}" cy="${cy}" r="${cellSize/2 - 1}" fill="${termGreen}" stroke="none" />`;
+                    if (s.num) {
+                        svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="#000" font-size="11" font-weight="bold" font-family="'Fira Code', monospace">${s.num}</text>`;
+                    }
+                } else if (s.color === 'M') {
+                    // Intersection Mark: Black masking block underneath to prevent grid lines intersecting the letter
+                    svg += `<circle cx="${cx}" cy="${cy}" r="8" fill="#000" />`;
+                    if (s.num) {
+                        svg += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="${termGreen}" font-size="12" font-weight="bold" font-family="'Fira Code', monospace">${s.num}</text>`;
+                    }
+                }
+            });
+
+            svg += `</svg>`;
+            wrapper.innerHTML = svg;
+            return wrapper;
+        }
+
+        async function processAndDisplay(content) {
+            const goBlockRegex = /```go([\s\S]*?)```/g;
+            let lastIndex = 0;
+            let match;
+
+            while ((match = goBlockRegex.exec(content)) !== null) {
+                const beforeText = content.substring(lastIndex, match.index).trim();
+                if (beforeText) print(beforeText);
+
+                const inner = match[1].trim();
+                let size = 19, stones = [];
+                inner.split('\n').forEach(line => {
+                    const parts = line.split(':');
+                    if (parts.length < 2) return;
+                    const key = parts[0].trim().toLowerCase();
+                    const val = parts[1].trim();
+
+                    if (key === 'size') size = parseInt(val);
+                    else if (key === 'black' || key === 'white' || key === 'marks') {
+                        val.split(',').forEach(item => {
+                            const pos = parseCoord(item, size);
+                            if (pos) {
+                                const colorType = key === 'black' ? 'B' : (key === 'white' ? 'W' : 'M');
+                                stones.push({ ...pos, color: colorType });
+                            }
+                        });
+                    }
+                });
+                outputElement.appendChild(createBoardSVG(size, stones));
+                lastIndex = goBlockRegex.lastIndex;
+            }
+            const remainingText = content.substring(lastIndex).trim();
+            if (remainingText) print(remainingText);
+            scrollToBottom();
+        }
+
+        function updatePrompt() {
+            let displayPath = currentPath.length === 1 ? "~" : "~/" + currentPath.slice(1).join('/');
+            promptLabel.textContent = `visitor@brain:${displayPath}$`;
+        }
+
+        function getDirectory(pathArr) {
+            let current = VIRTUAL_FS;
+            for (const part of pathArr) {
+                if (current[part] && current[part].type === 'dir') current = current[part].content;
+                else return null;
+            }
+            return current;
+        }
+
+        // Resolves a target directory path (returns array of keys)
+        function resolveDirPath(pathString) {
+            if (!pathString) return [...currentPath];
+            const parts = pathString.split('/').filter(p => p && p !== ".");
+            let tempPath = [...currentPath];
+            
+            if (pathString.startsWith('~') || pathString.startsWith('/')) {
+                tempPath = ["root"];
+                if (pathString.startsWith('~')) parts.shift();
+            }
+
+            for (const part of parts) {
+                if (part === "..") {
+                    if (tempPath.length > 1) tempPath.pop();
+                } else {
+                    const d = getDirectory(tempPath);
+                    if (d && d[part] && d[part].type === 'dir') {
+                        tempPath.push(part);
+                    } else {
+                        return null; // Invalid directory path segment
+                    }
+                }
+            }
+            return tempPath;
+        }
+
+        function resolveFilePath(pathString) {
+            if (!pathString) return null;
+            const parts = pathString.split('/').filter(p => p && p !== ".");
+            let tempPath = [...currentPath];
+            
+            if (pathString.startsWith('~') || pathString.startsWith('/')) {
+                tempPath = ["root"];
+                if (pathString.startsWith('~')) parts.shift();
+            }
+
+            for (let i = 0; i < parts.length - 1; i++) {
+                const part = parts[i];
+                if (part === "..") {
+                    if (tempPath.length > 1) tempPath.pop();
+                } else {
+                    const d = getDirectory(tempPath);
+                    if (d && d[part] && d[part].type === 'dir') tempPath.push(part);
+                    else return null;
+                }
+            }
+
+            const finalDir = getDirectory(tempPath);
+            const fileName = parts[parts.length - 1];
+            if (finalDir && finalDir[fileName] && finalDir[fileName].type === 'file') {
+                return finalDir[fileName];
+            }
+            return null;
+        }
+
+        const commands = {
+            help: () => print("Commands: ls, cd, cat, pwd, clear, help"),
+            pwd: () => print(currentPath.length === 1 ? "~" : "~/" + currentPath.slice(1).join('/')),
+            clear: () => { outputElement.innerHTML = ''; print("BrainTerminal v6.4.0", "system"); },
+            ls: (args) => {
+                const targetPath = resolveDirPath(args[0]);
+                if (!targetPath) return print(`ls: ${args[0]}: No such directory`, "error");
+                
+                const dir = getDirectory(targetPath);
+                if (!dir) return;
+                const grid = document.createElement('div');
+                grid.className = 'ls-grid flex flex-wrap gap-4 mb-2';
+                Object.keys(dir).forEach(item => {
+                    const span = document.createElement('span');
+                    span.className = dir[item].type === 'dir' ? 'folder' : 'file';
+                    span.textContent = item + (dir[item].type === 'dir' ? '/' : '');
+                    grid.appendChild(span);
+                });
+                outputElement.appendChild(grid);
+            },
+            cd: (args) => {
+                if (!args[0] || args[0] === "~") currentPath = ["root"];
+                else {
+                    const targetPath = resolveDirPath(args[0]);
+                    if (targetPath) {
+                        currentPath = targetPath;
+                    } else {
+                        print(`cd: no such directory: ${args[0]}`, "error");
+                        return;
+                    }
+                }
+                updatePrompt();
+            },
+            cat: async (args) => {
+                if (!args[0]) return print("cat: missing filename", "error");
+                const target = resolveFilePath(args[0]);
+                if (!target) return print(`cat: ${args[0]}: No such file`, "error");
+                await processAndDisplay(target.content || "[Empty]");
+            }
+        };
+
+        inputElement.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                const val = inputElement.value;
+                const [cmd, ...args] = val.trim().split(/\s+/);
+                const line = document.createElement('div');
+                line.className = 'output-line';
+                line.innerHTML = `<span class="prompt">${promptLabel.textContent}</span> ${val}`;
+                outputElement.appendChild(line);
+                inputElement.value = '';
+                if (cmd && commands[cmd.toLowerCase()]) await commands[cmd.toLowerCase()](args);
+                else if (cmd) print(`command not found: ${cmd}`, "error");
+                scrollToBottom();
+            }
+        });
+
+        updatePrompt();
+    </script>
+</body>
+</html>    <style>
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
 
         :root {
